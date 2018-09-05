@@ -10,7 +10,7 @@
 		<version>1.0.0</version>
 	</parent>
 	<artifactId>gfatm-notifications-sms</artifactId>
-	<name>sms</name>
+	<name>gfatm-notifications-sms</name>
 	<url>http://maven.apache.org</url>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -20,6 +20,10 @@
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.ihsinformatics.gfatm-notifications</groupId>
+			<artifactId>gfatm-notifications-common</artifactId>
 		</dependency>
 	</dependencies>
 </project>
