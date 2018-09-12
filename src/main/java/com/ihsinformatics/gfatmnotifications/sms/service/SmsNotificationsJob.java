@@ -12,6 +12,7 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 package com.ihsinformatics.gfatmnotifications.sms.service;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
@@ -30,10 +31,9 @@ import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
-import com.ihsinformatics.gfatmnotifications.common.Constant;
-import com.ihsinformatics.gfatmnotifications.common.service.GfatmDatabaseUtil;
+import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
-import com.ihsinformatics.gfatmnotifications.sms.SmsConstant;
+import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DateTimeUtil;
 
 /**
@@ -51,7 +51,7 @@ public class SmsNotificationsJob implements NotificationService {
 		HostnameVerifier hostNameVerifier = new HostnameVerifier() {
 			@Override
 			public boolean verify(String hostname, SSLSession session) {
-				return hostname.equals(SmsConstant.SMS_SERVER_ADDRESS);
+				return hostname.equals(SmsContext.SMS_SERVER_ADDRESS);
 			}
 		};
 		HttpsURLConnection.setDefaultHostnameVerifier(hostNameVerifier);
@@ -68,18 +68,16 @@ public class SmsNotificationsJob implements NotificationService {
 		SmsNotificationsJob smsJob = (SmsNotificationsJob) dataMap.get("smsJob");
 		this.setDateFrom(smsJob.getDateFrom());
 		this.setDateTo(smsJob.getDateTo());
+		try {
+			Context.initialize();
+			setDateFrom(getDateFrom().minusHours(24));
+			System.out.println(getDateFrom() + " " + getDateTo());
 
-		// With every trigger we need to fetch all the data
-		GfatmDatabaseUtil db = new GfatmDatabaseUtil();
-		db.loadLocations();
-		db.loadPatients();
-		db.loadUsers();
-		db.loadEncounterTypes();
-
-		setDateFrom(getDateFrom().minusHours(24));
-		System.out.println(getDateFrom() + " " + getDateTo());
-
-		// executeFastSms(dateFrom, dateTo);
+			// executeFastSms(dateFrom, dateTo);
+		} catch (IOException e) {
+			log.warning("Unable to initialize context.");
+			throw new JobExecutionException(e.getMessage());
+		}
 	}
 
 	/*
@@ -96,11 +94,11 @@ public class SmsNotificationsJob implements NotificationService {
 			content.append("message=" + URLEncoder.encode(message, "UTF-8") + "&");
 			content.append(
 					"schedule_time=" + URLEncoder.encode(DateTimeUtil.toSqlDateTimeString(sendOn), "UTF-8") + "&");
-			content.append("project_id=" + Constant.PROJECT_NAME + "&");
-			if (SmsConstant.SMS_USE_SSL) {
-				response = postSecure(SmsConstant.SMS_SERVER_ADDRESS, content.toString());
+			content.append("project_id=" + Context.PROJECT_NAME + "&");
+			if (SmsContext.SMS_USE_SSL) {
+				response = postSecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
 			} else {
-				response = postInsecure(SmsConstant.SMS_SERVER_ADDRESS, content.toString());
+				response = postInsecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
 			}
 		} catch (UnsupportedEncodingException e) {
 			log.log(Level.SEVERE, e.getMessage());
@@ -124,12 +122,12 @@ public class SmsNotificationsJob implements NotificationService {
 		con.setRequestMethod("POST");
 		con.setRequestProperty("Accept", "application/json");
 		con.setRequestProperty("Content-Type", "text/html; charset=UTF-8");
-		con.setRequestProperty("Authorization", "Basic " + SmsConstant.SMS_API_KEY);
+		con.setRequestProperty("Authorization", "Basic " + SmsContext.SMS_API_KEY);
 		con.setDoOutput(true);
 		int responseCode = con.getResponseCode();
-		System.out.println("\nSending 'POST' request to URL : " + url);
-		System.out.println("Post parameters : " + content);
-		System.out.println("Response Code : " + responseCode);
+		StringBuilder message = new StringBuilder("\n").append("Sending 'POST' request to URL : ").append(url)
+				.append("Post parameters : ").append(content).append("Response Code : ").append(responseCode);
+		System.out.println(message.toString());
 		BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
 		String inputLine;
 		StringBuffer response = new StringBuffer();
@@ -156,7 +154,7 @@ public class SmsNotificationsJob implements NotificationService {
 		con.setRequestProperty("Accept", "application/json");
 		con.setRequestProperty("Content-Encoding", "gzip");
 		con.setRequestProperty("Content-Type", "text/html; charset=UTF-8");
-		con.setRequestProperty("Authorization", "Basic " + SmsConstant.SMS_API_KEY);
+		con.setRequestProperty("Authorization", "Basic " + SmsContext.SMS_API_KEY);
 		con.setDoOutput(true);
 		int responseCode = con.getResponseCode();
 		System.out.println("\nSending 'POST' request to URL : " + url);

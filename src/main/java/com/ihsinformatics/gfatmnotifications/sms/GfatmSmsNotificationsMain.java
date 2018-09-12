@@ -11,6 +11,8 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
  */
 package com.ihsinformatics.gfatmnotifications.sms;
 
+import java.lang.management.ManagementFactory;
+import java.util.Date;
 import java.util.logging.Logger;
 
 import org.joda.time.DateTime;
@@ -32,6 +34,9 @@ import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 
 public class GfatmSmsNotificationsMain {
 
+	// Detect whether the app is running in DEBUG mode or not
+	private static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
+			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 
 	/**
@@ -41,27 +46,30 @@ public class GfatmSmsNotificationsMain {
 	 * @throws ModuleMustStartException
 	 */
 	public static void main(String[] args) {
-		// Set date/time from and to
-		DateTime from = new DateTime();
-		from = from.minusHours(SmsConstant.SMS_SCHEDULE_INTERVAL_IN_HOURS);
-		DateTime to = new DateTime();
-
-		// Create SMS Job
-		JobDetail smsJob = JobBuilder.newJob(SmsNotificationsJob.class).withIdentity("smsJob", "smsGroup").build();
-		SmsNotificationsJob smsJobObj = new SmsNotificationsJob();
-		smsJobObj.setDateFrom(from);
-		smsJobObj.setDateTo(to);
-		smsJob.getJobDataMap().put("smsJob", smsJobObj);
-
-		// Create trigger with given interval and start time
-		SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-				.withIntervalInMinutes(SmsConstant.SMS_SCHEDULE_INTERVAL_IN_HOURS).repeatForever();
-		Trigger trigger = TriggerBuilder.newTrigger().withIdentity("smsTrigger", "smsGroup")
-				.withSchedule(scheduleBuilder)
-				// .startAt(SmsConstant.SMS_SCHEDULE_START_TIME)
-				.startNow().build();
-		Scheduler smsScheduler = null;
+		System.out.println("Is this Debug mode? " + DEBUG_MODE);
 		try {
+			// Set date/time from and to
+			DateTime from = new DateTime();
+			from = from.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
+			DateTime to = new DateTime();
+
+			// Create SMS Job
+			JobDetail smsJob = JobBuilder.newJob(SmsNotificationsJob.class).withIdentity("smsJob", "smsGroup").build();
+			SmsNotificationsJob smsJobObj = new SmsNotificationsJob();
+			smsJobObj.setDateFrom(from);
+			smsJobObj.setDateTo(to);
+			smsJob.getJobDataMap().put("smsJob", smsJobObj);
+
+			// Create trigger with given interval and start time
+			SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
+					.withIntervalInMinutes(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS).repeatForever();
+			// In debug mode, run immediately
+			if (DEBUG_MODE) {
+				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 10);
+			}
+			Trigger trigger = TriggerBuilder.newTrigger().withIdentity("smsTrigger", "smsGroup")
+					.withSchedule(scheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
+			Scheduler smsScheduler = null;
 			smsScheduler = StdSchedulerFactory.getDefaultScheduler();
 			smsScheduler.scheduleJob(smsJob, trigger);
 			smsScheduler.start();

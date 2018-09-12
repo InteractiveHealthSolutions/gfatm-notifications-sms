@@ -12,12 +12,9 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 package com.ihsinformatics.gfatmnotifications.sms;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Date;
 
-import com.ihsinformatics.gfatmnotifications.common.Constant;
-import com.ihsinformatics.util.ClassLoaderUtil;
-import com.ihsinformatics.util.DatabaseUtil;
+import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.util.DateTimeUtil;
 
 /**
@@ -25,7 +22,7 @@ import com.ihsinformatics.util.DateTimeUtil;
  *
  */
 @SuppressWarnings("deprecation")
-public class SmsConstant extends Constant {
+public class SmsContext {
 
 	// Link to the SMS service API
 	public static final String SMS_SERVER_ADDRESS;
@@ -34,41 +31,26 @@ public class SmsConstant extends Constant {
 	// Whether or not to use SSL encryption
 	public static final Boolean SMS_USE_SSL;
 	// How often to check for new SMS notifications in DB
-	public static final int SMS_SCHEDULE_INTERVAL_IN_HOURS;
+	public static int SMS_SCHEDULE_INTERVAL_IN_HOURS;
 	// What time to start schedule on
-	public static final Date SMS_SCHEDULE_START_TIME;
+	public static Date SMS_SCHEDULE_START_TIME;
 
 	static {
 		try {
-			readProperties();
-			String url = getProps().getProperty("local.connection.url", "jdbc:mysql://localhost:3306");
-			String dbName = getProps().getProperty("local.connection.database", "openmrs");
-			String driverName = getProps().getProperty("local.connection.driver_class", "com.mysql.jdbc.Driver");
-			String userName = getProps().getProperty("local.connection.username", "root");
-			String password = getProps().getProperty("password");
-			DatabaseUtil localDb = new DatabaseUtil(url, dbName, driverName, userName, password);
-			setLocalDb(localDb);
+			Context.initialize();
 		} catch (IOException e) {
 			e.printStackTrace();
-			System.exit(-1);
 		}
-		SMS_SERVER_ADDRESS = getProps().getProperty("sms.server.address", "https://ihs.trgccms.com/api/send_sms/");
-		SMS_API_KEY = getProps().getProperty("sms.api.key", "aWhzc21zOnVsNjJ6eDM=");
-		SMS_USE_SSL = getProps().getProperty("sms.server.ssl", "true").equals("true");
-		SMS_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(getProps().getProperty("sms.job.interval", "24"));
-		String timeStr = getProps().getProperty("sms.job.start_time", "00:00:00");
+		SMS_SERVER_ADDRESS = Context.getProps().getProperty("sms.server.address",
+				"https://ihs.trgccms.com/api/send_sms/");
+		SMS_API_KEY = Context.getProps().getProperty("sms.api.key", "aWhzc21zOnVsNjJ6eDM=");
+		SMS_USE_SSL = Context.getProps().getProperty("sms.server.ssl", "true").equals("true");
+		SMS_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.job.interval", "24"));
+		String timeStr = Context.getProps().getProperty("sms.job.start_time", "00:00:00");
 		SMS_SCHEDULE_START_TIME = new Date();
 		Date scheduleTime = DateTimeUtil.fromString(timeStr, DateTimeUtil.detectDateFormat(timeStr));
 		SMS_SCHEDULE_START_TIME.setHours(scheduleTime.getHours());
 		SMS_SCHEDULE_START_TIME.setMinutes(scheduleTime.getMinutes());
 		SMS_SCHEDULE_START_TIME.setSeconds(scheduleTime.getSeconds());
 	}
-
-	public static void readProperties() throws IOException {
-		InputStream inputStream = ClassLoaderUtil.getResourceAsStream(PROP_FILE_NAME, SmsConstant.class);
-		if (inputStream != null) {
-			getProps().load(inputStream);
-		}
-	}
-
 }
