@@ -18,7 +18,10 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.text.ParseException;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,7 +35,13 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
+import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
+import com.ihsinformatics.gfatmnotifications.common.model.Location;
+import com.ihsinformatics.gfatmnotifications.common.model.Patient;
+import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
+import com.ihsinformatics.gfatmnotifications.common.util.Decision;
+import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DateTimeUtil;
 
@@ -46,6 +55,7 @@ public class SmsNotificationsJob implements NotificationService {
 
 	private DateTime dateFrom;
 	private DateTime dateTo;
+	private FormattedMessageParser messageParser;
 
 	public SmsNotificationsJob() {
 		HostnameVerifier hostNameVerifier = new HostnameVerifier() {
@@ -55,6 +65,7 @@ public class SmsNotificationsJob implements NotificationService {
 			}
 		};
 		HttpsURLConnection.setDefaultHostnameVerifier(hostNameVerifier);
+		messageParser = new FormattedMessageParser(Decision.LEAVE_EMPTY);
 	}
 
 	/*
@@ -73,10 +84,41 @@ public class SmsNotificationsJob implements NotificationService {
 			setDateFrom(getDateFrom().minusHours(24));
 			System.out.println(getDateFrom() + " " + getDateTo());
 
-			// executeFastSms(dateFrom, dateTo);
+			// PERFORM ACTIONS
+//			RuleEngineService ruleEngineService = new RuleEngineService();
+//			ruleEngineService.testRun();
+
+			run();
+
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
+		} catch (ParseException e) {
+			log.warning("Unable to parse messages.");
+			throw new JobExecutionException(e.getMessage());
+		}
+	}
+
+	public void run() throws ParseException {
+		DateTime from = DateTime.now().minusDays(30);
+		DateTime to = DateTime.now().minusHours(1);
+		String message = "";
+		for (Integer i : Context.getEncounterTypes().keySet()) {
+			if (Context.getEncounterTypes().get(i).equals("Treatment Initiation")) {
+				List<Encounter> encounters = Context.getEncounters(from, to, i);
+				for (Encounter encounter : encounters) {
+					Map<String, Object> observations = Context.getEncounterObservations(encounter);
+					if (observations.containsValue("1024")) {
+						Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
+						User user = Context.getUserByUsername(encounter.getUsername());
+						Location location = Context.getLocationByName(encounter.getLocation());
+						String preparedMessage = messageParser.parseFormattedMessage(
+								SmsContext.getMessage("CTB-FUP-REM"), encounter, patient, user, location);
+						System.out.println(preparedMessage);
+						// sendNotification(addressTo, preparedMessage, subject, sendOn);
+					}
+				}
+			}
 		}
 	}
 

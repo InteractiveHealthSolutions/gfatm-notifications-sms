@@ -11,10 +11,19 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 */
 package com.ihsinformatics.gfatmnotifications.sms;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.DirectoryIteratorException;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Properties;
+import java.util.Set;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
+import com.ihsinformatics.util.ClassLoaderUtil;
 import com.ihsinformatics.util.DateTimeUtil;
 
 /**
@@ -24,20 +33,38 @@ import com.ihsinformatics.util.DateTimeUtil;
 @SuppressWarnings("deprecation")
 public class SmsContext {
 
+	// Path to the directory where all rule files are stored
+	public static final String RULE_DIRECTORY = "rules";
+
+	// Message file path
+	private static final String MESSAGE_PROP_FILE = "message.properties";
+
+	// Where all codes and their respective messages are mapped
+	private static Properties messages;
+
 	// Link to the SMS service API
 	public static final String SMS_SERVER_ADDRESS;
+
 	// API Key
 	public static final String SMS_API_KEY;
+
 	// Whether or not to use SSL encryption
 	public static final Boolean SMS_USE_SSL;
+
 	// How often to check for new SMS notifications in DB
 	public static int SMS_SCHEDULE_INTERVAL_IN_HOURS;
+
 	// What time to start schedule on
 	public static Date SMS_SCHEDULE_START_TIME;
+
+	private static Set<File> ruleFiles;
+
+	// Collection of files in the rules directory
 
 	static {
 		try {
 			Context.initialize();
+			readMessageProperties();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -52,5 +79,60 @@ public class SmsContext {
 		SMS_SCHEDULE_START_TIME.setHours(scheduleTime.getHours());
 		SMS_SCHEDULE_START_TIME.setMinutes(scheduleTime.getMinutes());
 		SMS_SCHEDULE_START_TIME.setSeconds(scheduleTime.getSeconds());
+	}
+
+	/**
+	 * Read properties from PROP_FILE
+	 * 
+	 * @throws IOException
+	 */
+	public static void readMessageProperties() throws IOException {
+		InputStream inputStream = ClassLoaderUtil.getResourceAsStream(MESSAGE_PROP_FILE, SmsContext.class);
+		if (inputStream != null) {
+			messages = new Properties();
+			messages.load(inputStream);
+		}
+	}
+
+	/**
+	 * Loads all readable files with extension xls or xlsx from rules directory into
+	 * a Set
+	 * 
+	 * @throws DirectoryIteratorException
+	 */
+	public static void loadRuleFiles() throws DirectoryIteratorException {
+		URL url = ClassLoaderUtil.getResource(RULE_DIRECTORY, SmsContext.class);
+		File dir = new File(url.getFile());
+		if (!dir.isDirectory() || !dir.canRead()) {
+			throw new DirectoryIteratorException(new IOException(
+					"Rule directory is not accessible. All rule files must be in an accessible directory named \"rules\"."));
+		}
+		SmsContext.ruleFiles = new HashSet<File>();
+		for (File file : Arrays.asList(dir.listFiles())) {
+			if (file.getName().matches("^(.)+(xls)x?")) {
+				SmsContext.ruleFiles.add(file);
+			}
+		}
+	}
+
+	/**
+	 * @return
+	 */
+	public static Set<File> getRuleFiles() {
+		return ruleFiles;
+	}
+
+	/**
+	 * Read message text from messages file by code and return
+	 * 
+	 * @param code
+	 * @return
+	 */
+	public static String getMessage(String code) {
+		String message = messages.getProperty(code);
+		if (message == null) {
+			message = "Message unavailable for code: " + code;
+		}
+		return message;
 	}
 }
