@@ -21,7 +21,6 @@ import java.net.URLEncoder;
 import java.text.ParseException;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -37,6 +36,7 @@ import org.quartz.JobExecutionException;
 import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
+import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
@@ -102,20 +102,21 @@ public class SmsNotificationsJob implements NotificationService {
 	public void run() throws ParseException {
 		DateTime from = DateTime.now().minusDays(30);
 		DateTime to = DateTime.now().minusHours(1);
-		String message = "";
 		for (Integer i : Context.getEncounterTypes().keySet()) {
 			if (Context.getEncounterTypes().get(i).equals("Treatment Initiation")) {
 				List<Encounter> encounters = Context.getEncounters(from, to, i);
 				for (Encounter encounter : encounters) {
-					Map<String, Object> observations = Context.getEncounterObservations(encounter);
-					if (observations.containsValue("1024")) {
-						Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
-						User user = Context.getUserByUsername(encounter.getUsername());
-						Location location = Context.getLocationByName(encounter.getLocation());
-						String preparedMessage = messageParser.parseFormattedMessage(
-								SmsContext.getMessage("CTB-FUP-REM"), encounter, patient, user, location);
-						System.out.println(preparedMessage);
-						// sendNotification(addressTo, preparedMessage, subject, sendOn);
+					List<Observation> observations = Context.getEncounterObservations(encounter);
+					for (Observation obs : observations) {
+						if (obs.getValueCoded().equals(9999)) {
+							Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
+							User user = Context.getUserByUsername(encounter.getUsername());
+							Location location = Context.getLocationByName(encounter.getLocation());
+							String preparedMessage = messageParser.parseFormattedMessage(
+									SmsContext.getMessage("CTB-FUP-REM"), encounter, patient, user, location);
+							System.out.println(preparedMessage);
+							// sendNotification(addressTo, preparedMessage, subject, sendOn);
+						}
 					}
 				}
 			}
