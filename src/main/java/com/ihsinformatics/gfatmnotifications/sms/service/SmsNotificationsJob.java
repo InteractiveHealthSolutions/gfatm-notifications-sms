@@ -40,10 +40,15 @@ import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
+import com.ihsinformatics.gfatmnotifications.common.util.DataType;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
+import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
+import com.ihsinformatics.gfatmnotifications.sms.model.Rule;
+import com.ihsinformatics.gfatmnotifications.sms.model.RuleBook;
 import com.ihsinformatics.util.DateTimeUtil;
+import com.ihsinformatics.util.RegexUtil;
 
 /**
  * @author owais.hussain@ihsinformatics.com
@@ -88,7 +93,10 @@ public class SmsNotificationsJob implements NotificationService {
 //			RuleEngineService ruleEngineService = new RuleEngineService();
 //			ruleEngineService.testRun();
 
-			run();
+			DateTime from = DateTime.now().minusMonths(12);
+			DateTime to = DateTime.now().minusMonths(0);
+
+			run(from, to);
 
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
@@ -99,25 +107,105 @@ public class SmsNotificationsJob implements NotificationService {
 		}
 	}
 
-	public void run() throws ParseException {
-		DateTime from = DateTime.now().minusDays(30);
-		DateTime to = DateTime.now().minusHours(1);
-		for (Integer i : Context.getEncounterTypes().keySet()) {
-			if (Context.getEncounterTypes().get(i).equals("Treatment Initiation")) {
-				List<Encounter> encounters = Context.getEncounters(from, to, i);
-				for (Encounter encounter : encounters) {
-					List<Observation> observations = Context.getEncounterObservations(encounter);
-					for (Observation obs : observations) {
-						if (obs.getValueCoded().equals(9999)) {
-							Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
-							User user = Context.getUserByUsername(encounter.getUsername());
-							Location location = Context.getLocationByName(encounter.getLocation());
-							String preparedMessage = messageParser.parseFormattedMessage(
-									SmsContext.getMessage("CTB-FUP-REM"), encounter, patient, user, location);
-							System.out.println(preparedMessage);
-							// sendNotification(addressTo, preparedMessage, subject, sendOn);
-						}
-					}
+	/**
+	 * At present, this function can only validate all OR's or all AND's, not their
+	 * combinations
+	 * 
+	 * @param patient   TODO
+	 * @param location  TODO
+	 * @param encounter
+	 * @param rule
+	 * 
+	 * @return
+	 */
+	public boolean validateConditions(Patient patient, Location location, Encounter encounter, Rule rule) {
+		List<Observation> observations = Context.getEncounterObservations(encounter);
+		String conditions = rule.getConditions();
+		String orPattern = "(.)+OR(.)+";
+		String andPattern = "(.)+AND(.)+";
+		if (conditions.matches(orPattern) && conditions.matches(andPattern)) {
+			log.severe("Conditions contain both OR and AND clauses. This is not supported (yet).");
+			return false;
+		}
+		if (conditions.matches(orPattern)) {
+			String[] orConditions = conditions.split("( )?OR( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is true
+				if (validateSingleCondition(condition, observations)) {
+					return true;
+				}
+			}
+		} else if (conditions.matches(andPattern)) {
+			String[] orConditions = conditions.split("( )?AND( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is false
+				if (!validateSingleCondition(condition, observations)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		return false;
+	}
+
+	private boolean validateSingleCondition(String condition, List<Observation> observations) {
+		boolean result = false;
+		String[] parts = condition.replaceAll("[\\{\\}]", "").split(":");
+		String variable = parts[0];
+		String validationType = parts[1];
+		// Search for the observation's concept name matching the variable name
+		Observation target = null;
+		for (Observation observation : observations) {
+			if (variableMatchesWithConcept(variable, observation)) {
+				target = observation;
+			}
+		}
+		String value = target.getValue().toString();
+		try {
+			result = ValidationUtil.validateData(validationType, DataType.STRING.name(), value);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return result;
+	}
+
+	/**
+	 * This function only checks whether the variable is an Integer ID, or a concept
+	 * name and matches with the concept in the observation
+	 * 
+	 * @param variable
+	 * @param observation
+	 * @return
+	 */
+	private boolean variableMatchesWithConcept(String variable, Observation observation) {
+		// Check if the variable is a concept ID
+		if (RegexUtil.isNumeric(variable, false)) {
+			return observation.getConceptId().equals(Integer.parseInt(variable));
+		}
+		return observation.getConceptName().equalsIgnoreCase(variable);
+	}
+
+	public void run(DateTime from, DateTime to) throws ParseException, IOException {
+		RuleBook ruleBook = new RuleBook();
+		List<Rule> rules = ruleBook.getSmsRules();
+		// Read each rule and execute the decision
+		for (Rule rule : rules) {
+			if (rule.getEncounterType() == null) {
+				continue;
+			}
+			// Fetch all the encounters for this type
+			List<Encounter> encounters = Context.getEncounters(from, to,
+					Context.getEncounterTypeId(rule.getEncounterType()));
+			for (Encounter encounter : encounters) {
+				Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
+				Location location = Context.getLocationByName(encounter.getLocation());
+				if (validateConditions(patient, location, encounter, rule)) {
+					User user = Context.getUserByUsername(encounter.getUsername());
+					String preparedMessage = messageParser.parseFormattedMessage(
+							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
+					System.out.println(preparedMessage);
+					Date sendOn = new Date();
+					sendNotification(rule.getSendTo(), preparedMessage, Context.PROJECT_NAME, sendOn);
 				}
 			}
 		}

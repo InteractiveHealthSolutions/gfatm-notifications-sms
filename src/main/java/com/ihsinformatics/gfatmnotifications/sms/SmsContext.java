@@ -119,6 +119,9 @@ public class SmsContext {
 	 * @return
 	 */
 	public static Set<File> getRuleFiles() {
+		if (ruleFiles == null) {
+			SmsContext.loadRuleFiles();
+		}
 		return ruleFiles;
 	}
 
