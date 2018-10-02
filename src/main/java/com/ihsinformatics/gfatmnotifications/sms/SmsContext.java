@@ -11,16 +11,10 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 */
 package com.ihsinformatics.gfatmnotifications.sms;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
-import java.nio.file.DirectoryIteratorException;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Properties;
-import java.util.Set;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.util.ClassLoaderUtil;
@@ -57,10 +51,6 @@ public class SmsContext {
 	// What time to start schedule on
 	public static Date SMS_SCHEDULE_START_TIME;
 
-	private static Set<File> ruleFiles;
-
-	// Collection of files in the rules directory
-
 	static {
 		try {
 			Context.initialize();
@@ -92,37 +82,6 @@ public class SmsContext {
 			messages = new Properties();
 			messages.load(inputStream);
 		}
-	}
-
-	/**
-	 * Loads all readable files with extension xls or xlsx from rules directory into
-	 * a Set
-	 * 
-	 * @throws DirectoryIteratorException
-	 */
-	public static void loadRuleFiles() throws DirectoryIteratorException {
-		URL url = ClassLoaderUtil.getResource(RULE_DIRECTORY, SmsContext.class);
-		File dir = new File(url.getFile());
-		if (!dir.isDirectory() || !dir.canRead()) {
-			throw new DirectoryIteratorException(new IOException(
-					"Rule directory is not accessible. All rule files must be in an accessible directory named \"rules\"."));
-		}
-		SmsContext.ruleFiles = new HashSet<File>();
-		for (File file : Arrays.asList(dir.listFiles())) {
-			if (file.getName().matches("^(.)+(xls)x?")) {
-				SmsContext.ruleFiles.add(file);
-			}
-		}
-	}
-
-	/**
-	 * @return
-	 */
-	public static Set<File> getRuleFiles() {
-		if (ruleFiles == null) {
-			SmsContext.loadRuleFiles();
-		}
-		return ruleFiles;
 	}
 
 	/**

@@ -15,6 +15,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -29,6 +30,7 @@ import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
 
 import org.joda.time.DateTime;
+import org.json.JSONObject;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -38,16 +40,15 @@ import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
 import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
+import com.ihsinformatics.gfatmnotifications.common.model.Rule;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
-import com.ihsinformatics.gfatmnotifications.common.util.DataType;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
-import com.ihsinformatics.gfatmnotifications.sms.model.Rule;
-import com.ihsinformatics.gfatmnotifications.sms.model.RuleBook;
 import com.ihsinformatics.util.DateTimeUtil;
+import com.ihsinformatics.util.JsonUtil;
 import com.ihsinformatics.util.RegexUtil;
 
 /**
@@ -87,11 +88,7 @@ public class SmsNotificationsJob implements NotificationService {
 		try {
 			Context.initialize();
 			setDateFrom(getDateFrom().minusHours(24));
-			System.out.println(getDateFrom() + " " + getDateTo());
-
-			// PERFORM ACTIONS
-//			RuleEngineService ruleEngineService = new RuleEngineService();
-//			ruleEngineService.testRun();
+			log.info(getDateFrom() + " " + getDateTo());
 
 			DateTime from = DateTime.now().minusMonths(12);
 			DateTime to = DateTime.now().minusMonths(0);
@@ -119,7 +116,6 @@ public class SmsNotificationsJob implements NotificationService {
 	 * @return
 	 */
 	public boolean validateConditions(Patient patient, Location location, Encounter encounter, Rule rule) {
-		List<Observation> observations = Context.getEncounterObservations(encounter);
 		String conditions = rule.getConditions();
 		String orPattern = "(.)+OR(.)+";
 		String andPattern = "(.)+AND(.)+";
@@ -131,7 +127,7 @@ public class SmsNotificationsJob implements NotificationService {
 			String[] orConditions = conditions.split("( )?OR( )?");
 			for (String condition : orConditions) {
 				// No need to proceed even if one condition is true
-				if (validateSingleCondition(condition, observations)) {
+				if (validateSingleCondition(condition, patient, location, encounter, encounter.getObservations())) {
 					return true;
 				}
 			}
@@ -139,7 +135,7 @@ public class SmsNotificationsJob implements NotificationService {
 			String[] orConditions = conditions.split("( )?AND( )?");
 			for (String condition : orConditions) {
 				// No need to proceed even if one condition is false
-				if (!validateSingleCondition(condition, observations)) {
+				if (!validateSingleCondition(condition, patient, location, encounter, encounter.getObservations())) {
 					return false;
 				}
 			}
@@ -148,25 +144,93 @@ public class SmsNotificationsJob implements NotificationService {
 		return false;
 	}
 
-	private boolean validateSingleCondition(String condition, List<Observation> observations) {
+	private boolean validateSingleCondition(String condition, Patient patient, Location location, Encounter encounter,
+			List<Observation> observations) {
 		boolean result = false;
-		String[] parts = condition.replaceAll("[\\{\\}]", "").split(":");
-		String variable = parts[0];
-		String validationType = parts[1];
-		// Search for the observation's concept name matching the variable name
-		Observation target = null;
-		for (Observation observation : observations) {
-			if (variableMatchesWithConcept(variable, observation)) {
-				target = observation;
-			}
+		JSONObject jsonObject = JsonUtil.getJSONObject(condition);
+		if (!(jsonObject.has("entity") && jsonObject.has("property") && jsonObject.has("validate")
+				&& jsonObject.has("value"))) {
+			log.severe("Condition must contain all four required keys: entity, validate and value");
+			return false;
 		}
-		String value = target.getValue().toString();
+		String entity = jsonObject.getString("entity");
+		String property = jsonObject.getString("property");
+		String validationType = jsonObject.getString("validate");
+		String expectedValue = jsonObject.getString("value");
+		String actualValue = null;
+
 		try {
-			result = ValidationUtil.validateData(validationType, DataType.STRING.name(), value);
+			// In case of Encounter, search through observations
+			if (entity.equals("Encounter")) {
+				// Search for the observation's concept name matching the variable name
+				Observation target = null;
+				for (Observation observation : observations) {
+					if (variableMatchesWithConcept(property, observation)) {
+						target = observation;
+						break;
+					}
+				}
+				if (target == null) {
+					return result;
+				}
+				actualValue = target.getValue().toString();
+			}
+			// In case of Patient or Location, search for the defined property
+			else if (entity.equals("Patient")) {
+				actualValue = getEntityPropertyValue(patient, property);
+			} else if (entity.equals("Location")) {
+				actualValue = getEntityPropertyValue(location, property);
+			}
+			// Check the type of validation and call respective method
+			if (validationType.equals("VALUE")) {
+				return actualValue.equalsIgnoreCase(expectedValue);
+			} else if (validationType.equalsIgnoreCase("RANGE")) {
+				Double valueDouble = Double.parseDouble(actualValue);
+				return ValidationUtil.validateRange(expectedValue, valueDouble);
+			} else if (validationType.equalsIgnoreCase("REGEX")) {
+				return ValidationUtil.validateRegex(expectedValue, actualValue);
+			} else if (validationType.equalsIgnoreCase("QUERY")) {
+				return ValidationUtil.validateQuery(expectedValue, actualValue);
+			}
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		return result;
+	}
+
+	/**
+	 * Checks the entity type of the object and looks for the value in given
+	 * property using Reflection
+	 * 
+	 * @param object
+	 * @param property
+	 * @return
+	 * @throws NoSuchFieldException
+	 * @throws IllegalAccessException
+	 */
+	private String getEntityPropertyValue(Object object, String property)
+			throws NoSuchFieldException, IllegalAccessException {
+		String actualValue;
+		Field field;
+		if (object instanceof Patient) {
+			field = Patient.class.getDeclaredField(property);
+		} else if (object instanceof Location) {
+			field = Location.class.getDeclaredField(property);
+		} else if (object instanceof Encounter) {
+			field = Encounter.class.getDeclaredField(property);
+		} else if (object instanceof User) {
+			field = User.class.getDeclaredField(property);
+		}
+		field = Patient.class.getDeclaredField(property);
+		boolean flag = field.isAccessible();
+		field.setAccessible(true);
+		actualValue = field.get(object).toString();
+		field.setAccessible(flag);
+		return actualValue;
 	}
 
 	/**
@@ -186,8 +250,7 @@ public class SmsNotificationsJob implements NotificationService {
 	}
 
 	public void run(DateTime from, DateTime to) throws ParseException, IOException {
-		RuleBook ruleBook = new RuleBook();
-		List<Rule> rules = ruleBook.getSmsRules();
+		List<Rule> rules = Context.getRuleBook().getSmsRules();
 		// Read each rule and execute the decision
 		for (Rule rule : rules) {
 			if (rule.getEncounterType() == null) {
@@ -197,8 +260,10 @@ public class SmsNotificationsJob implements NotificationService {
 			List<Encounter> encounters = Context.getEncounters(from, to,
 					Context.getEncounterTypeId(rule.getEncounterType()));
 			for (Encounter encounter : encounters) {
-				Patient patient = Context.getPatientByIdentifier(encounter.getPatientId());
+				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier());
 				Location location = Context.getLocationByName(encounter.getLocation());
+				List<Observation> observations = Context.getEncounterObservations(encounter);
+				encounter.setObservations(observations);
 				if (validateConditions(patient, location, encounter, rule)) {
 					User user = Context.getUserByUsername(encounter.getUsername());
 					String preparedMessage = messageParser.parseFormattedMessage(
