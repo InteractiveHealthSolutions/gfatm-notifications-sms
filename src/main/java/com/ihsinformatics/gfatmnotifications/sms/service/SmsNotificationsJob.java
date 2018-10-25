@@ -19,9 +19,15 @@ import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.sql.SQLException;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.InvalidPropertiesFormatException;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -90,7 +96,7 @@ public class SmsNotificationsJob implements NotificationService {
 			setDateFrom(getDateFrom().minusHours(24));
 			log.info(getDateFrom() + " " + getDateTo());
 
-			DateTime from = DateTime.now().minusMonths(12);
+			DateTime from = DateTime.now().minusDays(2);//minusMonths(12);
 			DateTime to = DateTime.now().minusMonths(0);
 
 			run(from, to);
@@ -120,7 +126,25 @@ public class SmsNotificationsJob implements NotificationService {
 		String orPattern = "(.)+OR(.)+";
 		String andPattern = "(.)+AND(.)+";
 		if (conditions.matches(orPattern) && conditions.matches(andPattern)) {
-			log.severe("Conditions contain both OR and AND clauses. This is not supported (yet).");
+			String[] orConditions = conditions.split("( )?OR( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is true
+				if (condition.matches(andPattern)) {
+
+					String[] andConditions = conditions.split("( )?AND( )?");
+					for (String nestedCondition : andConditions) {
+						// No need to proceed even if one condition is false
+						if (!validateSingleCondition(conditions, patient, location, encounter,
+								encounter.getObservations())) {
+							return false;
+						}
+					}
+					return true;
+				} else {
+					return validateSingleCondition(conditions, patient, location, encounter,
+							encounter.getObservations());
+				}
+			}
 			return false;
 		}
 		if (conditions.matches(orPattern)) {
@@ -140,6 +164,8 @@ public class SmsNotificationsJob implements NotificationService {
 				}
 			}
 			return true;
+		} else {
+			return validateSingleCondition(conditions, patient, location, encounter, encounter.getObservations());
 		}
 		return false;
 	}
@@ -191,6 +217,14 @@ public class SmsNotificationsJob implements NotificationService {
 				return ValidationUtil.validateRegex(expectedValue, actualValue);
 			} else if (validationType.equalsIgnoreCase("QUERY")) {
 				return ValidationUtil.validateQuery(expectedValue, actualValue);
+			} else if (validationType.equalsIgnoreCase("NOTNULL") || validationType.equalsIgnoreCase("PRESENT")
+					|| validationType.equalsIgnoreCase("EXISTS")) {
+				if (actualValue != null) {
+					return true;
+				}
+				return false;
+			} else if (validationType.equalsIgnoreCase("List")) {
+				return ValidationUtil.validateList(expectedValue, actualValue);
 			}
 		} catch (NoSuchFieldException e) {
 			e.printStackTrace();
@@ -245,8 +279,12 @@ public class SmsNotificationsJob implements NotificationService {
 		// Check if the variable is a concept ID
 		if (RegexUtil.isNumeric(variable, false)) {
 			return observation.getConceptId().equals(Integer.parseInt(variable));
+		} else if (observation.getConceptName().equalsIgnoreCase(variable)) {
+			return true;
+		} else if (observation.getConceptShortName().equalsIgnoreCase(variable)) {
+			return true;
 		}
-		return observation.getConceptName().equalsIgnoreCase(variable);
+		return false;
 	}
 
 	public void run(DateTime from, DateTime to) throws ParseException, IOException {
@@ -256,24 +294,316 @@ public class SmsNotificationsJob implements NotificationService {
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
+
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(from, to,
 					Context.getEncounterTypeId(rule.getEncounterType()));
+
+			// patient to whom sms is already sent ?
+			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
 				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier());
+				if(patient==null) {
+					continue;
+				}
+				if (imformedPatients.get(patient.getPersonId()) != null) {
+					System.out.println("Sms already sent to Patient with identifer =" + patient.getPatientIdentifier());
+					continue;
+				}
+
 				Location location = Context.getLocationByName(encounter.getLocation());
 				List<Observation> observations = Context.getEncounterObservations(encounter);
 				encounter.setObservations(observations);
 				if (validateConditions(patient, location, encounter, rule)) {
 					User user = Context.getUserByUsername(encounter.getUsername());
+
 					String preparedMessage = messageParser.parseFormattedMessage(
 							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 					System.out.println(preparedMessage);
 					Date sendOn = new Date();
-					sendNotification(rule.getSendTo(), preparedMessage, Context.PROJECT_NAME, sendOn);
+					// String dateField = rule.getScheduleDate();
+					DateTime referenceDate = null;
+
+					try {
+						referenceDate = getReferenceDate(rule.getScheduleDate(), encounter);
+						sendOn = calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+					String contactNumber = null;
+					boolean isItPatient = false;
+					if (rule.getSendTo().equalsIgnoreCase("patient")) {
+						contactNumber = patient.getPrimaryContact();
+						if (!patient.getConsent().equalsIgnoreCase("1065")) {
+							log.info("Patient : " + patient.getPatientIdentifier() + "  doesnot want to receive SMS!");
+
+							continue;
+						}
+
+						if (Context.getRuleBook().getBlacklistedPatient().contains(patient.getPatientIdentifier())) {
+							log.info("Patient : " + patient.getPatientIdentifier() + "  is in blacklist!");
+
+							continue;
+						}
+						/*
+						 * if(!ValidationUtil.isValidContactNumber(contactNumber)) {
+						 * log.info("Patient : "+patient.getPatientIdentifier()
+						 * +"  doesnot have an valid number!"); continue; }
+						 */
+						isItPatient = true;
+
+					} else if (rule.getSendTo().equalsIgnoreCase("doctor")) {
+						//TODO  to be decided
+					} else if (rule.getSendTo().equalsIgnoreCase("supervisor") || rule.getSendTo().equalsIgnoreCase("facility")) {
+						contactNumber=location.getPrimaryContact();
+
+					}
+					contactNumber = "03343811112";
+					if (sendOn != null) {
+						DateTime now = new DateTime();
+						DateTime beforeNow = now.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
+						if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
+							if (!validateStopConditions(patient, location, encounter, rule)) {
+								sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
+								if (isItPatient) {
+									imformedPatients.put(patient.getPersonId(), patient);
+								}
+							}
+
+						}
+					}
 				}
 			}
 		}
+	}
+
+	private boolean validateStopConditions(Patient patient, Location location, Encounter encounter, Rule rule) {
+		if (rule.getStopCondition() == null || rule.getStopCondition().isEmpty()) {
+			return false;
+		}
+		String conditions = rule.getStopCondition();
+		String orPattern = "(.)+OR(.)+";
+		String andPattern = "(.)+AND(.)+";
+		if (conditions.matches(orPattern) && conditions.matches(andPattern)) {
+			String[] orConditions = conditions.split("( )?OR( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is true
+				if (condition.matches(andPattern)) {
+
+					String[] andConditions = conditions.split("( )?AND( )?");
+					for (String nestedCondition : andConditions) {
+						// No need to proceed even if one condition is false
+						if (!validateSingleStopCondition(nestedCondition, patient, location)) {
+							return false;
+						}
+					}
+					return true;
+				} else {
+					return validateSingleStopCondition(conditions, patient, location);
+				}
+			}
+
+			return false;
+		}
+		if (conditions.matches(orPattern)) {
+			String[] orConditions = conditions.split("( )?OR( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is true
+
+				if (validateSingleStopCondition(condition, patient, location)) {
+					return true;
+				}
+			}
+		} else if (conditions.matches(andPattern)) {
+			String[] orConditions = conditions.split("( )?AND( )?");
+			for (String condition : orConditions) {
+				// No need to proceed even if one condition is false
+				if (!validateSingleStopCondition(condition, patient, location)) {
+					return false;
+				}
+			}
+			return true;
+		} else {
+			return validateSingleStopCondition(conditions, patient, location);
+		}
+
+		return false;
+	}
+
+	private boolean validateSingleStopCondition(String condition, Patient patient, Location location) {
+		boolean result = false;
+		JSONObject jsonObject = JsonUtil.getJSONObject(condition);
+	/*	if (jsonObject.has("entity") && jsonObject.has("property") && jsonObject.has("validate")) {
+			log.severe("Condition must contain all four required keys: entity, validate and value");
+			return false;
+		} else if(jsonObject.has("entity") && jsonObject.has("encounter") && jsonObject.has("validate")
+				&& jsonObject.has("after")) {
+			log.severe("Condition must contain all four required keys: entity, validate, after and encounter ");
+			return false;
+		}*/
+
+		String entity = jsonObject.getString("entity");
+
+		String validationType = jsonObject.getString("validate");
+
+		// Fetch all the encounters for this type
+		/*
+		 * List<Encounter> encounters = Context.getEncounters(from, to, ));
+		 */
+		String encounter = jsonObject.getString("encounter");
+		Encounter baseEncounter = null;
+		if (encounter != null || (!encounter.isEmpty())) {
+			try {
+			baseEncounter = Context.getEncounterByPatientIdentifier(patient.getPatientIdentifier(),
+					Context.getEncounterTypeId(encounter));
+			baseEncounter.setObservations(Context.getEncounterObservations(baseEncounter));
+			}catch(Exception e) {
+				e.printStackTrace();
+				return false;
+			}
+		}
+		String property = jsonObject.getString("property");
+		String expectedValue = jsonObject.getString("value");
+		String actualValue = null;
+		try {
+			// In case of Encounter, search through observations
+			if (entity.equals("Encounter")) {
+				// Search for the observation's concept name matching the variable name
+				Observation target = null;
+				for (Observation observation : baseEncounter.getObservations()) {
+					if (variableMatchesWithConcept(property, observation)) {
+						target = observation;
+						break;
+					}
+				}
+				if (target == null) {
+					return result;
+				}
+				actualValue = target.getValue().toString();
+			}
+			// In case of Patient or Location, search for the defined property
+			else if (entity.equals("Patient")) {
+				actualValue = getEntityPropertyValue(patient, property);
+			} else if (entity.equals("Location")) {
+				actualValue = getEntityPropertyValue(location, property);
+
+			}
+
+			// Check the type of validation and call respective method
+			if (validationType.equalsIgnoreCase("Encounter")) {
+				String afterEncounterType = jsonObject.getString("after");
+				Encounter afterEncounter = Context.getEncounterByPatientIdentifier(patient.getPatientIdentifier(),
+						Context.getEncounterTypeId(afterEncounterType));
+				if (baseEncounter.getEncounterDate() > afterEncounter.getEncounterDate()) {
+					return true;
+				}
+			} else {
+
+				// Search for the observation's concept name matching the variable name
+				Observation target = null;
+				for (Observation observation : baseEncounter.getObservations()) {
+					if (variableMatchesWithConcept(property, observation)) {
+						target = observation;
+						break;
+					}
+				}
+				if (target == null) {
+					return result;
+				}
+				actualValue = target.getValue().toString();
+
+				if (validationType.equals("VALUE")) {
+					return actualValue.equalsIgnoreCase(expectedValue);
+				} else if (validationType.equalsIgnoreCase("RANGE")) {
+					Double valueDouble = Double.parseDouble(actualValue);
+					return ValidationUtil.validateRange(expectedValue, valueDouble);
+				} else if (validationType.equalsIgnoreCase("REGEX")) {
+					return ValidationUtil.validateRegex(expectedValue, actualValue);
+				} else if (validationType.equalsIgnoreCase("QUERY")) {
+					return ValidationUtil.validateQuery(expectedValue, actualValue);
+				} else if (validationType.equalsIgnoreCase("NOTNULL") || validationType.equalsIgnoreCase("PRESENT")
+						|| validationType.equalsIgnoreCase("EXISTS")) {
+					if (actualValue != null) {
+						return true;
+					}
+					return false;
+				} else if (validationType.equalsIgnoreCase("List")) {
+					return ValidationUtil.validateList(expectedValue, actualValue);
+
+				}
+
+			}
+		} catch (InvalidPropertiesFormatException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (NoSuchFieldException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return false;
+	}
+
+	private Date calculateScheduleDate(DateTime referenceDate, Double plusMinus, String plusMinusUnit) {
+		Date returnDate = null;
+		if (referenceDate == null) {
+			return returnDate;
+		}
+		if (plusMinusUnit.equalsIgnoreCase("hours")) {
+			if (plusMinus < 0) {
+				returnDate = referenceDate.minusHours(plusMinus.intValue()).toDate();
+			} else {
+				returnDate = referenceDate.plusHours(plusMinus.intValue()).toDate();
+			}
+		} else if (plusMinusUnit.equalsIgnoreCase("days")) {
+			if (plusMinus < 0) {
+				returnDate = referenceDate.minusDays(plusMinus.intValue()).toDate();
+			} else {
+				returnDate = referenceDate.plusDays(plusMinus.intValue()).toDate();
+			}
+		} else if (plusMinusUnit.equalsIgnoreCase("months")) {
+			if (plusMinus < 0) {
+				returnDate = referenceDate.minusMonths(plusMinus.intValue()).toDate();
+			} else {
+				returnDate = referenceDate.plusMonths(plusMinus.intValue()).toDate();
+			}
+		}
+		return returnDate;
+	}
+
+	private DateTime getReferenceDate(String scheduleDate, Encounter encounter) throws Exception {
+
+		DateTime referenceDate = null;
+		FormattedMessageParser formattedMessageParser = new FormattedMessageParser(Decision.SKIP);
+
+		try {
+			Object object;
+			object = formattedMessageParser.getPropertyValue(encounter, scheduleDate);
+			if (object != null) {
+				if (object instanceof Long) {
+					return referenceDate = new DateTime((Long) object);
+				} else {
+					log.severe("Schedule Date must be a Date");
+					throw new Exception("Schedule Date Object is not a Date ");
+				}
+			}
+		} catch (SecurityException | IllegalArgumentException | ReflectiveOperationException e) {
+			e.printStackTrace();
+		}
+
+		Observation target = null;
+		for (Observation observation : encounter.getObservations()) {
+			if (variableMatchesWithConcept(scheduleDate, observation)) {
+				target = observation;
+				referenceDate = new DateTime(target.getValueDatetime());
+				break;
+			}
+		}
+
+		return referenceDate;
 	}
 
 	/*
@@ -297,8 +627,10 @@ public class SmsNotificationsJob implements NotificationService {
 				response = postInsecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
 			}
 		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
 			log.log(Level.SEVERE, e.getMessage());
 		} catch (Exception e) {
+			e.printStackTrace();
 			log.log(Level.SEVERE, e.getMessage());
 		}
 		return response;
@@ -313,7 +645,7 @@ public class SmsNotificationsJob implements NotificationService {
 	 * @throws Exception
 	 */
 	public String postSecure(String url, String content) throws Exception {
-		URL obj = new URL(url);
+		URL obj = new URL(url + "?" + content);
 		HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
 		con.setRequestMethod("POST");
 		con.setRequestProperty("Accept", "application/json");

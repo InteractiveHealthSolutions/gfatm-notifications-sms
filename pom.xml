@@ -24,14 +24,17 @@
 		<dependency>
 			<groupId>com.ihsinformatics.gfatm-notifications</groupId>
 			<artifactId>gfatm-notifications-common</artifactId>
+			
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-io</artifactId>
+			
 		</dependency>
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi</artifactId>
+			
 		</dependency>
 	</dependencies>
 </project>

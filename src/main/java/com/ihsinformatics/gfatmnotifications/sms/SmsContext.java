@@ -77,6 +77,7 @@ public class SmsContext {
 	 * @throws IOException
 	 */
 	public static void readMessageProperties() throws IOException {
+		//Context.getRuleBook().
 		InputStream inputStream = ClassLoaderUtil.getResourceAsStream(MESSAGE_PROP_FILE, SmsContext.class);
 		if (inputStream != null) {
 			messages = new Properties();
@@ -91,7 +92,8 @@ public class SmsContext {
 	 * @return
 	 */
 	public static String getMessage(String code) {
-		String message = messages.getProperty(code);
+		String message=Context.getRuleBook().getMessages().get(code);
+		//String message = messages.getProperty(code);
 		if (message == null) {
 			message = "Message unavailable for code: " + code;
 		}
