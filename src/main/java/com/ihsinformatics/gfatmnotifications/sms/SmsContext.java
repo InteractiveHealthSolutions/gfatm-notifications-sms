@@ -53,7 +53,7 @@ public class SmsContext {
 
 	// How often to check for new SMS notifications in DB
 	public static int SMS_SCHEDULE_INTERVAL_IN_HOURS;
-
+	
 	// What time to start schedule on
 	public static Date SMS_SCHEDULE_START_TIME;
 
