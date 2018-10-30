@@ -11,10 +11,16 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 */
 package com.ihsinformatics.gfatmnotifications.sms;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Date;
 import java.util.Properties;
+
+import javax.net.ssl.HttpsURLConnection;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.util.ClassLoaderUtil;
@@ -98,5 +104,67 @@ public class SmsContext {
 			message = "Message unavailable for code: " + code;
 		}
 		return message;
+	}
+	
+	/**
+	 * Send SSL-enabled message
+	 * 
+	 * @param url
+	 * @param content
+	 * @return
+	 * @throws Exception
+	 */
+	public static String postSecure(String url, String content) throws Exception {
+		URL obj = new URL(url + "?" + content);
+		HttpsURLConnection con = (HttpsURLConnection) obj.openConnection();
+		con.setRequestMethod("POST");
+		con.setRequestProperty("Accept", "application/json");
+		con.setRequestProperty("Content-Type", "text/html; charset=UTF-8");
+		con.setRequestProperty("Authorization", "Basic " + SmsContext.SMS_API_KEY);
+		con.setDoOutput(true);
+		int responseCode = con.getResponseCode();
+		StringBuilder message = new StringBuilder("\n").append("Sending 'POST' request to URL : ").append(url)
+				.append("Post parameters : ").append(content).append("Response Code : ").append(responseCode);
+		System.out.println(message.toString());
+		BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+		String inputLine;
+		StringBuffer response = new StringBuffer();
+		while ((inputLine = in.readLine()) != null) {
+			response.append(inputLine);
+		}
+		in.close();
+		return response.toString();
+	}
+
+	/**
+	 * Send unencrypted SMS
+	 * 
+	 * @param url
+	 * @param content
+	 * @return
+	 * @throws Exception
+	 */
+	@Deprecated
+	public static String postInsecure(String url, String content) throws Exception {
+		URL obj = new URL(url + "?" + content);
+		HttpURLConnection con = (HttpURLConnection) obj.openConnection();
+		con.setRequestMethod("POST");
+		con.setRequestProperty("Accept", "application/json");
+		con.setRequestProperty("Content-Encoding", "gzip");
+		con.setRequestProperty("Content-Type", "text/html; charset=UTF-8");
+		con.setRequestProperty("Authorization", "Basic " + SmsContext.SMS_API_KEY);
+		con.setDoOutput(true);
+		int responseCode = con.getResponseCode();
+		System.out.println("\nSending 'POST' request to URL : " + url);
+		System.out.println("Post parameters : " + content);
+		System.out.println("Response Code : " + responseCode);
+		BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+		String inputLine;
+		StringBuffer response = new StringBuffer();
+		while ((inputLine = in.readLine()) != null) {
+			response.append(inputLine);
+		}
+		in.close();
+		return response.toString();
 	}
 }
