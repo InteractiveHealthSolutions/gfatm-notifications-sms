@@ -15,6 +15,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -44,11 +45,13 @@ import org.quartz.JobExecutionException;
 import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
+import com.ihsinformatics.gfatmnotifications.common.model.Message;
 import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.Rule;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
+import com.ihsinformatics.gfatmnotifications.common.util.CsvFileWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
@@ -62,8 +65,11 @@ import com.ihsinformatics.util.RegexUtil;
  *
  */
 public class SmsNotificationsJob implements NotificationService {
-
+	private static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
+			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
+	private List<Message> messages=new ArrayList<>();
+	 private String fileName = System.getProperty("user.home")+"/alert.csv";
 
 	private DateTime dateFrom;
 	private DateTime dateTo;
@@ -100,7 +106,7 @@ public class SmsNotificationsJob implements NotificationService {
 			DateTime to = DateTime.now().minusMonths(0);
 
 			run(from, to);
-
+			CsvFileWriter.writeCsvFile(fileName,messages);
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
@@ -159,7 +165,7 @@ public class SmsNotificationsJob implements NotificationService {
 					boolean isItPatient = false;
 					if (rule.getSendTo().equalsIgnoreCase("patient")) {
 						contactNumber = patient.getPrimaryContact();
-						if (!patient.getConsent().equalsIgnoreCase("1065")) {
+						if (patient.getConsent().equalsIgnoreCase("1066")) {
 							log.info("Patient : " + patient.getPatientIdentifier() + "  doesnot want to receive SMS!");
 
 							continue;
@@ -170,11 +176,11 @@ public class SmsNotificationsJob implements NotificationService {
 
 							continue;
 						}
-						/*
-						 * if(!ValidationUtil.isValidContactNumber(contactNumber)) {
-						 * log.info("Patient : "+patient.getPatientIdentifier()
-						 * +"  doesnot have an valid number!"); continue; }
-						 */
+						
+						  if(!ValidationUtil.isValidContactNumber(contactNumber)) {
+						  log.info("Patient : "+patient.getPatientIdentifier()
+						  +"  doesnot have an valid number!"); continue; }
+						 
 						isItPatient = true;
 
 					} else if (rule.getSendTo().equalsIgnoreCase("doctor")) {
@@ -183,13 +189,19 @@ public class SmsNotificationsJob implements NotificationService {
 						contactNumber=location.getPrimaryContact();
 
 					}
-					contactNumber = "03343811112";
+					
 					if (sendOn != null) {
 						DateTime now = new DateTime();
 						DateTime beforeNow = now.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
 						if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
 							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule)) {
-								sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
+								// In debug mode
+								if (DEBUG_MODE) {
+									
+									messages.add(new Message(preparedMessage,contactNumber,Context.PROJECT_NAME, sendOn));
+								}else {
+								//sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
+								}
 								if (isItPatient) {
 									imformedPatients.put(patient.getPersonId(), patient);
 								}

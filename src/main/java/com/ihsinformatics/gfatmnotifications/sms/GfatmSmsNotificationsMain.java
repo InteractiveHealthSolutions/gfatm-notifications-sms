@@ -25,6 +25,7 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.StdSchedulerFactory;
 
+import com.ihsinformatics.gfatmnotifications.sms.service.ReminderSmsNotificationsJob;
 import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 
 /**
@@ -63,20 +64,30 @@ public class GfatmSmsNotificationsMain {
 			// Create trigger with given interval and start time
 			SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
 					.withIntervalInMinutes(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS).repeatForever();
-			
 
-			// Create trigger with given interval and start time
-			SimpleScheduleBuilder reminderScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-					.withIntervalInHours(24).repeatForever();
 			// In debug mode, run immediately
 			if (DEBUG_MODE) {
 				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 10);
 			}
 			Trigger trigger = TriggerBuilder.newTrigger().withIdentity("smsTrigger", "smsGroup")
 					.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
+
+			// Create SMS Job 
+			JobDetail smsJob2 = JobBuilder.newJob(ReminderSmsNotificationsJob.class).withIdentity("smsJob2", "smsGroup")
+					.build();
+			ReminderSmsNotificationsJob smsJobObj2 = new ReminderSmsNotificationsJob();
+			smsJobObj2.setDateFrom(from);
+			smsJobObj2.setDateTo(to);
+			smsJob2.getJobDataMap().put("smsJob2", smsJobObj2);
+			// Create trigger with given interval and start time
+			SimpleScheduleBuilder reminderScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
+					.withIntervalInHours(24).repeatForever();
+			Trigger trigger2 = TriggerBuilder.newTrigger().withIdentity("smsReminderTrigger", "smsGroup")
+					.withSchedule(reminderScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
 			Scheduler smsScheduler = null;
 			smsScheduler = StdSchedulerFactory.getDefaultScheduler();
 			smsScheduler.scheduleJob(smsJob, trigger);
+			smsScheduler.scheduleJob(smsJob2, trigger2);
 			smsScheduler.start();
 		} catch (SchedulerException e) {
 			log.severe(e.getMessage());
