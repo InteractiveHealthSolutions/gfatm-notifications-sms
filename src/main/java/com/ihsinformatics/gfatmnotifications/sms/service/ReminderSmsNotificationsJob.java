@@ -95,9 +95,9 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 		List<Rule> rules = Context.getRuleBook().getSmsRules();
 		// Read each rule and execute the decision
 		for (Rule rule : rules) {
-			if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.openmrs"))){
+			if(rule.getDatabaseConnectionName().trim().equalsIgnoreCase(props.getProperty("db.connection.openmrs").trim())){
 				dbUtil = Context.getOpenmrsDb();
-			}else if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.dwh"))){
+			}else if(rule.getDatabaseConnectionName().trim().equalsIgnoreCase(props.getProperty("db.connection.dwh").trim())){
 				dbUtil = Context.getDwDb();
 			}
 			
