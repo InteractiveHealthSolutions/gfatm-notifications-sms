@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -36,6 +37,7 @@ import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
+import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
 
 public class ReminderSmsNotificationsJob implements NotificationService {
@@ -44,6 +46,8 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 
 	private DateTime dateFrom;
 	private DateTime dateTo;
+	private DatabaseUtil dbUtil;
+	private static Properties props;
 	private FormattedMessageParser messageParser;
 	private List<Message> messages=new ArrayList<>();
 	 private String fileName = System.getProperty("user.home")+"/reminder.csv";
@@ -59,6 +63,7 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 		};
 		HttpsURLConnection.setDefaultHostnameVerifier(hostNameVerifier);
 		messageParser = new FormattedMessageParser(Decision.LEAVE_EMPTY);
+		props = Context.getProps();
 	}
 
 	@Override
@@ -90,6 +95,12 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 		List<Rule> rules = Context.getRuleBook().getSmsRules();
 		// Read each rule and execute the decision
 		for (Rule rule : rules) {
+			if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.openmrs"))){
+				dbUtil = Context.getOpenmrsDb();
+			}else if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.dwh"))){
+				dbUtil = Context.getDwDb();
+			}
+			
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
@@ -103,14 +114,14 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 			if(from==null) {
 				from=to.minusMonths(2);
 			}
-			// Fetch all the encounters for this type
+			// Fetch all the encounters for this type ,the third on your choice 
 			List<Encounter> encounters = Context.getEncounters(from, to,
-					Context.getEncounterTypeId(rule.getEncounterType()));
+					Context.getEncounterTypeId(rule.getEncounterType()),dbUtil);
 
 			// patient to whom sms is already sent ?
 			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
-				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier());
+				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
 				if(patient==null) {
 					continue;
 				}
@@ -119,11 +130,11 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 					continue;
 				}
 
-				Location location = Context.getLocationByName(encounter.getLocation());
-				List<Observation> observations = Context.getEncounterObservations(encounter);
+				Location location = Context.getLocationByName(encounter.getLocation(),dbUtil);
+				List<Observation> observations = Context.getEncounterObservations(encounter,dbUtil);
 				encounter.setObservations(observations);
 				if (ValidationUtil.validateConditions(patient, location, encounter, rule)) {
-					User user = Context.getUserByUsername(encounter.getUsername());
+					User user = Context.getUserByUsername(encounter.getUsername(),dbUtil);
 
 					String preparedMessage = messageParser.parseFormattedMessage(
 							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
@@ -175,7 +186,7 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 						DateTime now = new DateTime().plusMinutes(10);
 						//DateTime beforeNow = now.minusHours(SmsContext.);
 						//if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
-							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule)) {
+							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule,dbUtil)) {
 								// In debug mode
 								if (DEBUG_MODE) {
 									

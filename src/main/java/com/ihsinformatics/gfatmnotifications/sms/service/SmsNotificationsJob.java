@@ -29,6 +29,7 @@ import java.util.InvalidPropertiesFormatException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,6 +57,7 @@ import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
+import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
 import com.ihsinformatics.util.JsonUtil;
 import com.ihsinformatics.util.RegexUtil;
@@ -69,8 +71,10 @@ public class SmsNotificationsJob implements NotificationService {
 			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 	private List<Message> messages=new ArrayList<>();
-	 private String fileName = System.getProperty("user.home")+"/alert.csv";
-
+	private String fileName = System.getProperty("user.home")+"/alert.csv";
+	
+	private DatabaseUtil dbUtil;
+	private static Properties props;
 	private DateTime dateFrom;
 	private DateTime dateTo;
 	private FormattedMessageParser messageParser;
@@ -122,18 +126,23 @@ public class SmsNotificationsJob implements NotificationService {
 		List<Rule> rules = Context.getRuleBook().getSmsRules();
 		// Read each rule and execute the decision
 		for (Rule rule : rules) {
+			if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.openmrs"))){
+				dbUtil = Context.getOpenmrsDb();
+			}else if(rule.getDatabaseConnectionName().equals(props.getProperty("db.connection.dwh"))){
+				dbUtil = Context.getDwDb();
+			}
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
 
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(from, to,
-					Context.getEncounterTypeId(rule.getEncounterType()));
+					Context.getEncounterTypeId(rule.getEncounterType()),dbUtil);
 
 			// patient to whom sms is already sent ?
 			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
-				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier());
+				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
 				if(patient==null) {
 					continue;
 				}
@@ -142,11 +151,11 @@ public class SmsNotificationsJob implements NotificationService {
 					continue;
 				}
 
-				Location location = Context.getLocationByName(encounter.getLocation());
-				List<Observation> observations = Context.getEncounterObservations(encounter);
+				Location location = Context.getLocationByName(encounter.getLocation(),dbUtil);
+				List<Observation> observations = Context.getEncounterObservations(encounter,dbUtil);
 				encounter.setObservations(observations);
 				if (ValidationUtil.validateConditions(patient, location, encounter, rule)) {
-					User user = Context.getUserByUsername(encounter.getUsername());
+					User user = Context.getUserByUsername(encounter.getUsername(),dbUtil);
 
 					String preparedMessage = messageParser.parseFormattedMessage(
 							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
@@ -194,7 +203,7 @@ public class SmsNotificationsJob implements NotificationService {
 						DateTime now = new DateTime();
 						DateTime beforeNow = now.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
 						if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
-							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule)) {
+							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule,dbUtil)) {
 								// In debug mode
 								if (DEBUG_MODE) {
 									
