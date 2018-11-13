@@ -135,7 +135,9 @@ public class SmsNotificationsJob implements NotificationService {
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
-
+			if (!rule.getPlusMinusUnit().equalsIgnoreCase("hours")) {
+				continue;
+			}
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(from, to,
 					Context.getEncounterTypeId(rule.getEncounterType()),dbUtil);
@@ -144,7 +146,10 @@ public class SmsNotificationsJob implements NotificationService {
 			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
 				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
+				System.out.println("patient Identifier ="+encounter.getIdentifier());
+				//Patient patient = Context.getPatientByPatientId(encounter.getIdentifier(),dbUtil);
 				if(patient==null) {
+					System.out.println("patient Does not exits with patient Identifier ="+encounter.getIdentifier());
 					continue;
 				}
 				if (imformedPatients.get(patient.getPersonId()) != null) {
@@ -175,7 +180,7 @@ public class SmsNotificationsJob implements NotificationService {
 					boolean isItPatient = false;
 					if (rule.getSendTo().equalsIgnoreCase("patient")) {
 						contactNumber = patient.getPrimaryContact();
-						if (patient.getConsent().equalsIgnoreCase("1066")) {
+						if ( patient.getConsent()!=null && (!patient.getConsent().isEmpty())  && patient.getConsent().equalsIgnoreCase("1066")) {
 							log.info("Patient : " + patient.getPatientIdentifier() + "  doesnot want to receive SMS!");
 
 							continue;

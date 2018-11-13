@@ -61,14 +61,15 @@ public class GfatmSmsNotificationsMain {
 			smsJobObj.setDateTo(to);
 			smsJob.getJobDataMap().put("smsJob", smsJobObj);
 
+		
+			// In debug mode, run immediately
+			if (DEBUG_MODE) {
+				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 30); 
+			}
 			// Create trigger with given interval and start time
 			SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
 					.withIntervalInMinutes(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS).repeatForever();
 
-			// In debug mode, run immediately
-			if (DEBUG_MODE) {
-				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 10);
-			}
 			Trigger trigger = TriggerBuilder.newTrigger().withIdentity("smsTrigger", "smsGroup")
 					.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
 

@@ -114,15 +114,21 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 			if(from==null) {
 				from=to.minusMonths(2);
 			}
+			
+			System.out.println("Encounter Type ::"+rule.getEncounterType());
 			// Fetch all the encounters for this type ,the third on your choice 
 			List<Encounter> encounters = Context.getEncounters(from, to,
 					Context.getEncounterTypeId(rule.getEncounterType()),dbUtil);
-
+	
 			// patient to whom sms is already sent ?
 			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
+				System.out.println("patient Identifier ="+encounter.getIdentifier());
 				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
+	
+				//Patient patient = Context.getPatientByPatientId(encounter.getIdentifier(),dbUtil);
 				if(patient==null) {
+					System.out.println("patient Does not exits with patient Identifier ="+encounter.getIdentifier());
 					continue;
 				}
 				if (imformedPatients.get(patient.getPersonId()) != null) {
@@ -153,7 +159,7 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 					boolean isItPatient = false;
 					if (rule.getSendTo().equalsIgnoreCase("patient")) {
 						contactNumber = patient.getPrimaryContact();
-						if (patient.getConsent().equalsIgnoreCase("1066")) {
+						if ( patient.getConsent()!=null && (!patient.getConsent().isEmpty())  && patient.getConsent().equalsIgnoreCase("1066")) {
 							log.info("Patient : " + patient.getPatientIdentifier() + "  doesnot want to receive SMS!");
 
 							continue;
