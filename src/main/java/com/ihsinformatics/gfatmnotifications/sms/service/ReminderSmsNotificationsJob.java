@@ -5,6 +5,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.net.URLEncoder;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -18,12 +19,14 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.joda.time.DateTime;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
+import com.ihsinformatics.gfatmnotifications.common.model.Contact;
 import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
 import com.ihsinformatics.gfatmnotifications.common.model.Message;
@@ -32,13 +35,14 @@ import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.Rule;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
-import com.ihsinformatics.gfatmnotifications.common.util.CsvFileWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
+import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
+import com.ihsinformatics.util.RegexUtil;
 
 public class ReminderSmsNotificationsJob implements NotificationService {
 
@@ -50,7 +54,7 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 	private static Properties props;
 	private FormattedMessageParser messageParser;
 	private List<Message> messages=new ArrayList<>();
-	 private String fileName = System.getProperty("user.home")+"/reminder.csv";
+	 private String fileName = System.getProperty("user.home")+"/reminder";
 	private static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
 			.indexOf("-agentlib:jdwp") > 0;
 
@@ -77,16 +81,20 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 			setDateFrom(getDateFrom().minusHours(24));
 			log.info(getDateFrom() + " " + getDateTo());
 
-			DateTime from = DateTime.now().minusDays(2);// minusMonths(12);
-			DateTime to = DateTime.now().minusMonths(0);
+			//DateTime from = DateTime.now().minusDays(2);// minusMonths(12);
+			//DateTime to = DateTime.now().minusMonths(0);
 
 			run();
-			CsvFileWriter.writeCsvFile(fileName,messages);
+			ExcelSheetWriter.writeFile(fileName,messages);
+			System.out.println("Reminder Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
 		}   catch (ParseException e) { log.warning("Unable to parse messages."); throw
-			  new JobExecutionException(e.getMessage()); }
+			  new JobExecutionException(e.getMessage()); } catch (InvalidFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 			 
 
 	}
@@ -123,7 +131,7 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 			// patient to whom sms is already sent ?
 			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
 			for (Encounter encounter : encounters) {
-				System.out.println("patient Identifier ="+encounter.getIdentifier());
+				
 				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
 	
 				//Patient patient = Context.getPatientByPatientId(encounter.getIdentifier(),dbUtil);
@@ -152,8 +160,15 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 					try {
 						referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 						sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
+						System.out.println("patient Identifier ="+encounter.getIdentifier() + ",reference Date : "+referenceDate +", send On: "+ sendOn);
 					} catch (Exception e) {
 						e.printStackTrace();
+					}
+					DateTime now = new DateTime();
+					DateTime beforeNow = now.minusDays(1);
+					if (!(sendOn.getTime()>= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) 
+					{
+						continue;
 					}
 					String contactNumber = null;
 					boolean isItPatient = false;
@@ -186,17 +201,18 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 					} else if (rule.getSendTo().equalsIgnoreCase("supervisor") || rule.getSendTo().equalsIgnoreCase("facility")) {
 						contactNumber=location.getPrimaryContact();
 
+					}else if (rule.getSendTo().contains("search"))
+					{
+						String id=rule.getSendTo().substring(7, rule.getSendTo().length()-1);
+						contactNumber=search(id,dbUtil,encounter,patient);
 					}
-					
 					if (sendOn != null) {
-						DateTime now = new DateTime().plusMinutes(10);
-						//DateTime beforeNow = now.minusHours(SmsContext.);
-						//if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
 							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule,dbUtil)) {
 								// In debug mode
 								if (DEBUG_MODE) {
-									
-									messages.add(new Message(preparedMessage,contactNumber,Context.PROJECT_NAME, sendOn));
+									SimpleDateFormat sdf=new SimpleDateFormat(DateTimeUtil.STANDARD_DATE);
+									//sdf.format(date)
+									messages.add(new Message(contactNumber,sdf.format(sendOn),rule.getEncounterType(),patient.getFullName(),rule.getSendTo(),sdf.format(new Date(referenceDate.getMillis())), location.getDescription()));
 								}else {
 							//	sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
 								}
@@ -205,13 +221,44 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 								}
 							}
 
-						//}
-					}
+						}
 				}
 			}
 		}
 		
 		
+	}
+
+	private String search(String id,DatabaseUtil dbUtil, Encounter encounter,Patient patient) {
+		if(id==null || id.isEmpty()) {
+			return null;
+		}
+		String contactNumber=null;
+		if (RegexUtil.isNumeric(id, false)) {
+			Observation target = null;
+			for(Observation obs:encounter.getObservations()) {
+				
+				if (ValidationUtil.variableMatchesWithConcept(id, obs)) {
+					target = obs;
+					break;
+				}
+			}
+		
+			if(target==null) {
+				return null;
+			}
+		
+			 Contact contact = Context.getContactByLocationId(Integer.parseInt(target.getValue().toString()), dbUtil);
+			 if(contact!=null) {
+				 contactNumber=contact.getPrimaryContact();
+			 }else {
+				 
+			 }
+		}else {
+			//int relationShipId=Context.getRelationshipId(id,dbUtil);
+		//	Context.getContactByPatientRelationship(relationShipId,patient, dbUtil);
+		}
+		 return contactNumber;
 	}
 
 	@Override

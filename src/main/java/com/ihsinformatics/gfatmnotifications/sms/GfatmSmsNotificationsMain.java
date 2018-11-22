@@ -64,7 +64,7 @@ public class GfatmSmsNotificationsMain {
 		
 			// In debug mode, run immediately
 			if (DEBUG_MODE) {
-				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 30); 
+				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150 ); 
 			}
 			// Create trigger with given interval and start time
 			SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
@@ -87,7 +87,7 @@ public class GfatmSmsNotificationsMain {
 					.withSchedule(reminderScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
 			Scheduler smsScheduler = null;
 			smsScheduler = StdSchedulerFactory.getDefaultScheduler();
-			smsScheduler.scheduleJob(smsJob, trigger);
+			//smsScheduler.scheduleJob(smsJob, trigger);
 			smsScheduler.scheduleJob(smsJob2, trigger2);
 			smsScheduler.start();
 		} catch (SchedulerException e) {

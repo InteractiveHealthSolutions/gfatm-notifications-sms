@@ -11,22 +11,15 @@ Interactive Health Solutions, hereby disclaims all copyright interest in this pr
 */
 package com.ihsinformatics.gfatmnotifications.sms.service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.Field;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URLEncoder;
-import java.sql.SQLException;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.InvalidPropertiesFormatException;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -37,8 +30,8 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSession;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.joda.time.DateTime;
-import org.json.JSONObject;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -54,13 +47,12 @@ import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
 import com.ihsinformatics.gfatmnotifications.common.util.CsvFileWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
+import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
-import com.ihsinformatics.util.JsonUtil;
-import com.ihsinformatics.util.RegexUtil;
 
 /**
  * @author owais.hussain@ihsinformatics.com
@@ -71,7 +63,7 @@ public class SmsNotificationsJob implements NotificationService {
 			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 	private List<Message> messages=new ArrayList<>();
-	private String fileName = System.getProperty("user.home")+"/alert.csv";
+	private String fileName = System.getProperty("user.home")+"/alert";
 	
 	private DatabaseUtil dbUtil;
 	private static Properties props;
@@ -111,13 +103,17 @@ public class SmsNotificationsJob implements NotificationService {
 			DateTime to = DateTime.now().minusMonths(0);
 
 			run(from, to);
-			CsvFileWriter.writeCsvFile(fileName,messages);
+			ExcelSheetWriter.writeFile(fileName,messages);
+			System.out.println("alert Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
 		} catch (ParseException e) {
 			log.warning("Unable to parse messages.");
 			throw new JobExecutionException(e.getMessage());
+		} catch (InvalidFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 
@@ -176,6 +172,13 @@ public class SmsNotificationsJob implements NotificationService {
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
+					
+					DateTime now = new DateTime();
+					DateTime beforeNow = now.minusHours(2);
+					if (!(sendOn.getTime()>= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) 
+					{
+						continue;
+					}
 					String contactNumber = null;
 					boolean isItPatient = false;
 					if (rule.getSendTo().equalsIgnoreCase("patient")) {
@@ -198,22 +201,20 @@ public class SmsNotificationsJob implements NotificationService {
 						 
 						isItPatient = true;
 
-					} else if (rule.getSendTo().equalsIgnoreCase("doctor")) {
-						//TODO  to be decided
 					} else if (rule.getSendTo().equalsIgnoreCase("supervisor") || rule.getSendTo().equalsIgnoreCase("facility")) {
 						contactNumber=location.getPrimaryContact();
 
 					}
 					
 					if (sendOn != null) {
-						DateTime now = new DateTime();
-						DateTime beforeNow = now.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
-						if (sendOn.getTime() > beforeNow.getMillis() && sendOn.getTime() <= now.getMillis()) {
+		
 							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule,dbUtil)) {
 								// In debug mode
 								if (DEBUG_MODE) {
-									
-									messages.add(new Message(preparedMessage,contactNumber,Context.PROJECT_NAME, sendOn));
+									SimpleDateFormat sdf=new SimpleDateFormat(DateTimeUtil.STANDARD_DATE);
+									//sdf.format(date)
+									messages.add(new Message(contactNumber,sdf.format(sendOn),rule.getEncounterType(),patient.getFullName(),rule.getSendTo(),sdf.format(new Date(referenceDate.getMillis())), location.getDescription()));
+						
 								}else {
 								//sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
 								}
@@ -222,7 +223,6 @@ public class SmsNotificationsJob implements NotificationService {
 								}
 							}
 
-						}
 					}
 				}
 			}
