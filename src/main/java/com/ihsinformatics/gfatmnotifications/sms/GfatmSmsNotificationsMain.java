@@ -36,7 +36,7 @@ import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 public class GfatmSmsNotificationsMain {
 
 	// Detect whether the app is running in DEBUG mode or not
-	private static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
+	public static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
 			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 

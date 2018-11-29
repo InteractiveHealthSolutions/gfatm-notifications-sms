@@ -1,19 +1,22 @@
+/* Copyright(C) 2018 Interactive Health Solutions, Pvt. Ltd.
+
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License (GPLv3), or any later version.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with this program; if not, write to the Interactive Health Solutions, info@ihsinformatics.com
+You can also access the license on the internet at the address: http://www.gnu.org/licenses/gpl-3.0.html
+
+Interactive Health Solutions, hereby disclaims all copyright interest in this program written by the contributors.
+*/
 package com.ihsinformatics.gfatmnotifications.sms.service;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.lang.management.ManagementFactory;
-import java.net.URLEncoder;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -34,7 +37,6 @@ import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.Rule;
 import com.ihsinformatics.gfatmnotifications.common.model.User;
-import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
 import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
@@ -44,19 +46,11 @@ import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
 import com.ihsinformatics.util.RegexUtil;
 
-public class ReminderSmsNotificationsJob implements NotificationService {
-
-	private static final Logger log = Logger.getLogger(Class.class.getName());
-
-	private DateTime dateFrom;
-	private DateTime dateTo;
-	private DatabaseUtil dbUtil;
-	private static Properties props;
-	private FormattedMessageParser messageParser;
-	private List<Message> messages=new ArrayList<>();
-	 private String fileName = System.getProperty("user.home")+"/reminder";
-	private static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
-			.indexOf("-agentlib:jdwp") > 0;
+/**
+ * @author owais.hussain@ihsinformatics.com
+ *
+ */
+public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 
 	public ReminderSmsNotificationsJob() {
 		HostnameVerifier hostNameVerifier = new HostnameVerifier() {
@@ -67,9 +61,13 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 		};
 		HttpsURLConnection.setDefaultHostnameVerifier(hostNameVerifier);
 		messageParser = new FormattedMessageParser(Decision.LEAVE_EMPTY);
-		props = Context.getProps();
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.quartz.Job#execute(org.quartz.JobExecutionContext)
+	 */
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		JobDataMap dataMap = context.getMergedJobDataMap();
@@ -80,238 +78,118 @@ public class ReminderSmsNotificationsJob implements NotificationService {
 			Context.initialize();
 			setDateFrom(getDateFrom().minusHours(24));
 			log.info(getDateFrom() + " " + getDateTo());
-
-			//DateTime from = DateTime.now().minusDays(2);// minusMonths(12);
-			//DateTime to = DateTime.now().minusMonths(0);
-
-			run();
-			ExcelSheetWriter.writeFile(fileName,messages);
+			run(null, null);
+			ExcelSheetWriter.writeFile(fileName, messages);
 			System.out.println("Reminder Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
-		}   catch (ParseException e) { log.warning("Unable to parse messages."); throw
-			  new JobExecutionException(e.getMessage()); } catch (InvalidFormatException e) {
+		} catch (ParseException e) {
+			log.warning("Unable to parse messages.");
+			throw new JobExecutionException(e.getMessage());
+		} catch (InvalidFormatException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-			 
 
 	}
 
-	private void run() throws ParseException {
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.ihsinformatics.gfatmnotifications.sms.service.AbstractSmsNotificationsJob
+	 * #run(org.joda.time.DateTime, org.joda.time.DateTime)
+	 */
+	public void run(DateTime from, DateTime to) throws ParseException {
 		List<Rule> rules = Context.getRuleBook().getSmsRules();
 		// Read each rule and execute the decision
 		for (Rule rule : rules) {
-			if(rule.getDatabaseConnectionName().trim().equalsIgnoreCase(props.getProperty("db.connection.openmrs").trim())){
-				dbUtil = Context.getOpenmrsDb();
-			}else if(rule.getDatabaseConnectionName().trim().equalsIgnoreCase(props.getProperty("db.connection.dwh").trim())){
+			if (rule.getDatabaseConnectionName().toLowerCase().contains("datawarehouse")) {
 				dbUtil = Context.getDwDb();
+			} else {
+				dbUtil = Context.getOpenmrsDb();
 			}
-			
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
 			if (rule.getPlusMinusUnit().equalsIgnoreCase("hours")) {
 				continue;
 			}
-			
-			DateTime from = rule.getFetchDurationDate();
-			DateTime to=new DateTime();
-			//default value if there is no reference/fetch duration is not defined
-			if(from==null) {
-				from=to.minusMonths(2);
+			from = rule.getFetchDurationDate();
+			// Default value if there is no reference/fetch duration is not defined
+			if (from == null) {
+				from = to.minusMonths(2);
 			}
-			
-			System.out.println("Encounter Type ::"+rule.getEncounterType());
-			// Fetch all the encounters for this type ,the third on your choice 
-			List<Encounter> encounters = Context.getEncounters(from, to,
-					Context.getEncounterTypeId(rule.getEncounterType()),dbUtil);
-	
-			// patient to whom sms is already sent ?
-			Map<Integer, Patient> imformedPatients = new HashMap<Integer, Patient>();
-			for (Encounter encounter : encounters) {
-				
-				Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(),dbUtil);
-	
-				//Patient patient = Context.getPatientByPatientId(encounter.getIdentifier(),dbUtil);
-				if(patient==null) {
-					System.out.println("patient Does not exits with patient Identifier ="+encounter.getIdentifier());
+			// Fetch all the encounters for this type
+			List<Encounter> encounters = Context.getEncounters(from, new DateTime(),
+					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
+			executeRule(encounters, rule);
+		}
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * com.ihsinformatics.gfatmnotifications.sms.service.AbstractSmsNotificationsJob
+	 * #executeRule(java.util.List,
+	 * com.ihsinformatics.gfatmnotifications.common.model.Rule)
+	 */
+	public void executeRule(List<Encounter> encounters, Rule rule) throws ParseException {
+		// patient to whom sms is already sent ?
+		Map<Integer, Patient> informedPatients = new HashMap<Integer, Patient>();
+		for (Encounter encounter : encounters) {
+			Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(), dbUtil);
+			if (patient == null) {
+				log.info("Patient does not exits against patient identifier " + encounter.getIdentifier());
+				continue;
+			}
+			if (informedPatients.get(patient.getPersonId()) != null) {
+				log.info("SMS already sent to " + patient.getPatientIdentifier());
+				continue;
+			}
+			Location location = Context.getLocationByName(encounter.getLocation(), dbUtil);
+			List<Observation> observations = Context.getEncounterObservations(encounter, dbUtil);
+			encounter.setObservations(observations);
+			if (ValidationUtil.validateConditions(patient, location, encounter, rule)) {
+				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
+				String preparedMessage = messageParser.parseFormattedMessage(
+						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
+				Date sendOn = new Date();
+				DateTime referenceDate = null;
+				try {
+					referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
+					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				DateTime now = new DateTime();
+				DateTime beforeNow = now.minusDays(1);
+				if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
 					continue;
 				}
-				if (imformedPatients.get(patient.getPersonId()) != null) {
-					System.out.println("Sms already sent to Patient with identifer =" + patient.getPatientIdentifier());
-					continue;
-				}
-
-				Location location = Context.getLocationByName(encounter.getLocation(),dbUtil);
-				List<Observation> observations = Context.getEncounterObservations(encounter,dbUtil);
-				encounter.setObservations(observations);
-				if (ValidationUtil.validateConditions(patient, location, encounter, rule)) {
-					User user = Context.getUserByUsername(encounter.getUsername(),dbUtil);
-
-					String preparedMessage = messageParser.parseFormattedMessage(
-							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
-					System.out.println(preparedMessage);
-					Date sendOn = new Date();
-					// String dateField = rule.getScheduleDate();
-					DateTime referenceDate = null;
-
-					try {
-						referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
-						sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
-						System.out.println("patient Identifier ="+encounter.getIdentifier() + ",reference Date : "+referenceDate +", send On: "+ sendOn);
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-					DateTime now = new DateTime();
-					DateTime beforeNow = now.minusDays(1);
-					if (!(sendOn.getTime()>= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) 
-					{
+				String contact = getContactFromRule(patient, location, encounter, rule);
+				boolean isPatient = false;
+				if (rule.getSendTo().equalsIgnoreCase("patient")) {
+					isPatient = true;
+					if (Context.getRuleBook().getBlacklistedPatient().contains(patient.getPatientIdentifier())) {
+						log.info("Patient : " + patient.getPatientIdentifier() + " is in blocked list.");
 						continue;
 					}
-					String contactNumber = null;
-					boolean isItPatient = false;
-					if (rule.getSendTo().equalsIgnoreCase("patient")) {
-						contactNumber = patient.getPrimaryContact();
-						if ( patient.getConsent()!=null && (!patient.getConsent().isEmpty())  && patient.getConsent().equalsIgnoreCase("1066")) {
-							log.info("Patient : " + patient.getPatientIdentifier() + "  doesnot want to receive SMS!");
-
-							continue;
-						}
-
-						if (Context.getRuleBook().getBlacklistedPatient().contains(patient.getPatientIdentifier())) {
-							log.info("Patient : " + patient.getPatientIdentifier() + "  is in blacklist!");
-
-							continue;
-						}
-						
-						  if(!ValidationUtil.isValidContactNumber(contactNumber)) {
-						  log.info("Patient : "+patient.getPatientIdentifier()
-						  +"  doesnot have an valid number!"); 
-						  continue; 
-						  }
-						 
-						isItPatient = true;
-
-					} else if (rule.getSendTo().equalsIgnoreCase("doctor")) {
-						//TODO  to be decided
-						log.severe("SMS could not be send because doctor are not decided yet!");
-						continue;
-					} else if (rule.getSendTo().equalsIgnoreCase("supervisor") || rule.getSendTo().equalsIgnoreCase("facility")) {
-						contactNumber=location.getPrimaryContact();
-
-					}else if (rule.getSendTo().contains("search"))
-					{
-						String id=rule.getSendTo().substring(7, rule.getSendTo().length()-1);
-						contactNumber=search(id,dbUtil,encounter,patient);
+				}
+				if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule, dbUtil)) {
+					if (isPatient) {
+						informedPatients.put(patient.getPersonId(), patient);
 					}
-					if (sendOn != null) {
-							if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule,dbUtil)) {
-								// In debug mode
-								if (DEBUG_MODE) {
-									SimpleDateFormat sdf=new SimpleDateFormat(DateTimeUtil.STANDARD_DATE);
-									//sdf.format(date)
-									messages.add(new Message(contactNumber,sdf.format(sendOn),rule.getEncounterType(),patient.getFullName(),rule.getSendTo(),sdf.format(new Date(referenceDate.getMillis())), location.getDescription()));
-								}else {
-							//	sendNotification(contactNumber, preparedMessage, Context.PROJECT_NAME, sendOn);
-								}
-								if (isItPatient) {
-									imformedPatients.put(patient.getPersonId(), patient);
-								}
-							}
-
-						}
+					messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
+							DateTimeUtil.toSqlDateTimeString(sendOn), rule.getSendTo()));
+					if (!rule.getRecordOnly()) {
+						sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
+					}
 				}
 			}
 		}
-		
-		
-	}
 
-	private String search(String id,DatabaseUtil dbUtil, Encounter encounter,Patient patient) {
-		if(id==null || id.isEmpty()) {
-			return null;
-		}
-		String contactNumber=null;
-		if (RegexUtil.isNumeric(id, false)) {
-			Observation target = null;
-			for(Observation obs:encounter.getObservations()) {
-				
-				if (ValidationUtil.variableMatchesWithConcept(id, obs)) {
-					target = obs;
-					break;
-				}
-			}
-		
-			if(target==null) {
-				return null;
-			}
-		
-			 Contact contact = Context.getContactByLocationId(Integer.parseInt(target.getValue().toString()), dbUtil);
-			 if(contact!=null) {
-				 contactNumber=contact.getPrimaryContact();
-			 }else {
-				 
-			 }
-		}else {
-			//int relationShipId=Context.getRelationshipId(id,dbUtil);
-		//	Context.getContactByPatientRelationship(relationShipId,patient, dbUtil);
-		}
-		 return contactNumber;
 	}
-
-	@Override
-	public String sendNotification(String addressTo, String message, String subject, Date sendOn) {
-		String response = null;
-		try {
-			StringBuffer content = new StringBuffer();
-			content.append("send_to=" + addressTo + "&");
-			content.append("message=" + URLEncoder.encode(message, "UTF-8") + "&");
-			content.append(
-					"schedule_time=" + URLEncoder.encode(DateTimeUtil.toSqlDateTimeString(sendOn), "UTF-8") + "&");
-			content.append("project_id=" + Context.PROJECT_NAME + "&");
-			if (SmsContext.SMS_USE_SSL) {
-				response = SmsContext.postSecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
-			} else {
-				response = SmsContext.postInsecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
-			}
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			log.log(Level.SEVERE, e.getMessage());
-		} catch (Exception e) {
-			e.printStackTrace();
-			log.log(Level.SEVERE, e.getMessage());
-		}
-		return response;
-	}
-
-	/**
-	 * @return the dateFrom
-	 */
-	public DateTime getDateFrom() {
-		return dateFrom;
-	}
-
-	/**
-	 * @param dateFrom the dateFrom to set
-	 */
-	public void setDateFrom(DateTime dateFrom) {
-		this.dateFrom = dateFrom;
-	}
-
-	/**
-	 * @return the dateTo
-	 */
-	public DateTime getDateTo() {
-		return dateTo;
-	}
-
-	/**
-	 * @param dateTo the dateTo to set
-	 */
-	public void setDateTo(DateTime dateTo) {
-		this.dateTo = dateTo;
-	}
-
 }
