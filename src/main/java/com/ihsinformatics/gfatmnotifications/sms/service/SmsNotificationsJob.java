@@ -132,7 +132,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 		// Patients to whom message has already been sent sent
 		Map<Integer, Patient> informedPatients = new HashMap<Integer, Patient>();
 		for (Encounter encounter : encounters) {
-			Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(), dbUtil);
+			Patient patient = Context.getPatientByIdentifierOrGeneratedId(encounter.getIdentifier(), null, dbUtil);
 			if (patient == null) {
 				log.info("Patient does not exits against patient identifier " + encounter.getIdentifier());
 				continue;

@@ -27,9 +27,7 @@ import com.ihsinformatics.gfatmnotifications.common.Context;
 import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
 import com.ihsinformatics.gfatmnotifications.common.model.Message;
-import com.ihsinformatics.gfatmnotifications.common.model.Observation;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
-import com.ihsinformatics.gfatmnotifications.common.model.Relationship;
 import com.ihsinformatics.gfatmnotifications.common.model.Rule;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
 import com.ihsinformatics.gfatmnotifications.common.service.SearchService;
@@ -111,7 +109,7 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 			contact = "";
 			break;
 		default:
-			contact = new SearchService().searchContactFromRule(patient, encounter, rule, dbUtil);
+			contact = new SearchService(dbUtil).searchContactFromRule(patient, encounter, rule);
 		}
 		if (!ValidationUtil.isValidContactNumber(contact)) {
 			log.info("Patient : " + patient.getPatientIdentifier() + " does not have an valid contact.");

@@ -29,7 +29,6 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
-import com.ihsinformatics.gfatmnotifications.common.model.Contact;
 import com.ihsinformatics.gfatmnotifications.common.model.Encounter;
 import com.ihsinformatics.gfatmnotifications.common.model.Location;
 import com.ihsinformatics.gfatmnotifications.common.model.Message;
@@ -42,9 +41,7 @@ import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
-import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
-import com.ihsinformatics.util.RegexUtil;
 
 /**
  * @author owais.hussain@ihsinformatics.com
@@ -140,7 +137,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 		// patient to whom sms is already sent ?
 		Map<Integer, Patient> informedPatients = new HashMap<Integer, Patient>();
 		for (Encounter encounter : encounters) {
-			Patient patient = Context.getPatientByIdentifier(encounter.getIdentifier(), dbUtil);
+			Patient patient = Context.getPatientByIdentifierOrGeneratedId(encounter.getIdentifier(), null, dbUtil);
 			if (patient == null) {
 				log.info("Patient does not exits against patient identifier " + encounter.getIdentifier());
 				continue;
