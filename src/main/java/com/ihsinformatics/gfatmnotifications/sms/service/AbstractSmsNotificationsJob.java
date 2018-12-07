@@ -105,9 +105,6 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 		case "supervisor":
 			contact = location.getPrimaryContact();
 			break;
-		case "doctor":
-			contact = "";
-			break;
 		default:
 			contact = new SearchService(dbUtil).searchContactFromRule(patient, encounter, rule);
 		}

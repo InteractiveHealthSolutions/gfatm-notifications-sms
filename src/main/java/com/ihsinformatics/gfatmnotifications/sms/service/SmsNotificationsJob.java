@@ -40,6 +40,7 @@ import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
+import com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DateTimeUtil;
 
@@ -68,26 +69,24 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		JobDataMap dataMap = context.getMergedJobDataMap();
-		SmsNotificationsJob smsJob = (SmsNotificationsJob) dataMap.get("smsJob");
+		SmsNotificationsJob smsJob = (SmsNotificationsJob) dataMap.get("smsAlertJob");
 		this.setDateFrom(smsJob.getDateFrom());
 		this.setDateTo(smsJob.getDateTo());
 		try {
 			Context.initialize();
-			setDateFrom(getDateFrom().minusHours(24));
-			log.info(getDateFrom() + " " + getDateTo());
-			DateTime from = DateTime.now().minusDays(2);// minusMonths(12);
-			DateTime to = DateTime.now().minusMonths(0);
-			run(from, to);
+			if (GfatmSmsNotificationsMain.DEBUG_MODE) {
+				setDateFrom(getDateFrom().minusMonths(3));
+				setDateTo(DateTime.now());
+			}
+			run(getDateFrom(), getDateTo());
 			ExcelSheetWriter.writeFile(fileName, messages);
 			log.info("New spread sheet is created for logging.");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
-		} catch (ParseException e) {
+		} catch (ParseException | InvalidFormatException e) {
 			log.warning("Unable to parse messages.");
 			throw new JobExecutionException(e.getMessage());
-		} catch (InvalidFormatException e) {
-			e.printStackTrace();
 		}
 	}
 
@@ -130,7 +129,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 	 */
 	public void executeRule(List<Encounter> encounters, Rule rule) throws ParseException {
 		// Patients to whom message has already been sent sent
-		Map<Integer, Patient> informedPatients = new HashMap<Integer, Patient>();
+		Map<Integer, Patient> informedPatients = new HashMap<>();
 		for (Encounter encounter : encounters) {
 			Patient patient = Context.getPatientByIdentifierOrGeneratedId(encounter.getIdentifier(), null, dbUtil);
 			if (patient == null) {
@@ -154,7 +153,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 					referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
 				} catch (Exception e) {
-					e.printStackTrace();
+					log.warning(e.getMessage());
 				}
 				DateTime now = new DateTime();
 				DateTime beforeNow = now.minusHours(2);

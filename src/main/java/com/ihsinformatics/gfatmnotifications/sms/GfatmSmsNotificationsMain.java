@@ -25,6 +25,7 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.StdSchedulerFactory;
 
+import com.ihsinformatics.gfatmnotifications.sms.service.AbstractSmsNotificationsJob;
 import com.ihsinformatics.gfatmnotifications.sms.service.ReminderSmsNotificationsJob;
 import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 
@@ -36,9 +37,35 @@ import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 public class GfatmSmsNotificationsMain {
 
 	// Detect whether the app is running in DEBUG mode or not
-	public static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
-			.indexOf("-agentlib:jdwp") > 0;
+	public static final boolean DEBUG_MODE;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
+	private static Scheduler scheduler;
+
+	static {
+		DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString().indexOf("-agentlib:jdwp") > 0;
+		// In debug mode, run immediately
+		if (DEBUG_MODE) {
+			SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150);
+		}
+		try {
+			scheduler = StdSchedulerFactory.getDefaultScheduler();
+		} catch (SchedulerException e) {
+			log.severe(e.getMessage());
+			System.exit(-1);
+		}
+	}
+
+	public void createJob(AbstractSmsNotificationsJob jobObj, String groupName, String jobName, String triggerName,
+			int repeatIntervalInHours) throws SchedulerException {
+		JobDetail job = JobBuilder.newJob(jobObj.getClass()).withIdentity(jobName, groupName).build();
+		job.getJobDataMap().put(jobName, jobObj);
+		// Create trigger with given interval and start time
+		SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
+				.withIntervalInHours(repeatIntervalInHours).repeatForever();
+		Trigger trigger = TriggerBuilder.newTrigger().withIdentity(triggerName, groupName)
+				.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
+		scheduler.scheduleJob(job, trigger);
+	}
 
 	/**
 	 * @param args
@@ -47,49 +74,26 @@ public class GfatmSmsNotificationsMain {
 	 * @throws ModuleMustStartException
 	 */
 	public static void main(String[] args) {
-		System.out.println("Is this Debug mode? " + DEBUG_MODE);
 		try {
-			// Set date/time from and to
-			DateTime from = new DateTime();
-			from = from.minusHours(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS);
-			DateTime to = new DateTime();
+			GfatmSmsNotificationsMain sms = new GfatmSmsNotificationsMain();
 
 			// Create SMS Job
-			JobDetail smsJob = JobBuilder.newJob(SmsNotificationsJob.class).withIdentity("smsJob", "smsGroup").build();
-			SmsNotificationsJob smsJobObj = new SmsNotificationsJob();
-			smsJobObj.setDateFrom(from);
-			smsJobObj.setDateTo(to);
-			smsJob.getJobDataMap().put("smsJob", smsJobObj);
+			SmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
+			smsAlertJobObj.setDateFrom(new DateTime().minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS));
+			smsAlertJobObj.setDateTo(new DateTime());
+			// Run every 2 hours
+			sms.createJob(smsAlertJobObj, "smsGroup", "smsAlertJob", "smsAlertTrigger",
+					SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
 
-		
-			// In debug mode, run immediately
-			if (DEBUG_MODE) {
-				SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150 ); 
-			}
-			// Create trigger with given interval and start time
-			SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-					.withIntervalInMinutes(SmsContext.SMS_SCHEDULE_INTERVAL_IN_HOURS).repeatForever();
+			ReminderSmsNotificationsJob smsReminderJobObj = new ReminderSmsNotificationsJob();
+			smsReminderJobObj
+					.setDateFrom(new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS));
+			smsReminderJobObj.setDateTo(new DateTime());
+			// Run every day
+//			sms.createJob(smsReminderJobObj, "smsGroup", "smsReminderJob", "smsReminderTrigger", SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS);
 
-			Trigger trigger = TriggerBuilder.newTrigger().withIdentity("smsTrigger", "smsGroup")
-					.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
-
-			// Create SMS Job 
-			JobDetail smsJob2 = JobBuilder.newJob(ReminderSmsNotificationsJob.class).withIdentity("smsJob2", "smsGroup")
-					.build();
-			ReminderSmsNotificationsJob smsJobObj2 = new ReminderSmsNotificationsJob();
-			smsJobObj2.setDateFrom(from);
-			smsJobObj2.setDateTo(to);
-			smsJob2.getJobDataMap().put("smsJob2", smsJobObj2);
-			// Create trigger with given interval and start time
-			SimpleScheduleBuilder reminderScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-					.withIntervalInHours(24).repeatForever();
-			Trigger trigger2 = TriggerBuilder.newTrigger().withIdentity("smsReminderTrigger", "smsGroup")
-					.withSchedule(reminderScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
-			Scheduler smsScheduler = null;
-			smsScheduler = StdSchedulerFactory.getDefaultScheduler();
-			//smsScheduler.scheduleJob(smsJob, trigger);
-			smsScheduler.scheduleJob(smsJob2, trigger2);
-			smsScheduler.start();
+			// Execute scheduler
+			scheduler.start();
 		} catch (SchedulerException e) {
 			log.severe(e.getMessage());
 			System.exit(-1);

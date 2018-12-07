@@ -77,16 +77,13 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			log.info(getDateFrom() + " " + getDateTo());
 			run(null, null);
 			ExcelSheetWriter.writeFile(fileName, messages);
-			System.out.println("Reminder Excel sheet is created");
+			log.info("Reminder Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
-		} catch (ParseException e) {
+		} catch (ParseException | InvalidFormatException e) {
 			log.warning("Unable to parse messages.");
 			throw new JobExecutionException(e.getMessage());
-		} catch (InvalidFormatException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		}
 
 	}
@@ -135,7 +132,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 	 */
 	public void executeRule(List<Encounter> encounters, Rule rule) throws ParseException {
 		// patient to whom sms is already sent ?
-		Map<Integer, Patient> informedPatients = new HashMap<Integer, Patient>();
+		Map<Integer, Patient> informedPatients = new HashMap<>();
 		for (Encounter encounter : encounters) {
 			Patient patient = Context.getPatientByIdentifierOrGeneratedId(encounter.getIdentifier(), null, dbUtil);
 			if (patient == null) {
@@ -159,7 +156,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 					referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
 				} catch (Exception e) {
-					e.printStackTrace();
+					log.warning(e.getMessage());
 				}
 				DateTime now = new DateTime();
 				DateTime beforeNow = now.minusDays(1);

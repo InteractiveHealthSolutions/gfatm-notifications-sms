@@ -52,7 +52,10 @@ public class SmsContext {
 	public static final Boolean SMS_USE_SSL;
 
 	// How often to check for new SMS notifications in DB
-	public static int SMS_SCHEDULE_INTERVAL_IN_HOURS;
+	public static int SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS;
+	
+	// How often to check for new SMS notifications in DB
+	public static int SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS;
 	
 	// What time to start schedule on
 	public static Date SMS_SCHEDULE_START_TIME;
@@ -67,9 +70,10 @@ public class SmsContext {
 		}
 		SMS_SERVER_ADDRESS = Context.getProps().getProperty("sms.server.address",
 				"https://ihs.trgccms.com/api/send_sms/");
-		SMS_API_KEY = Context.getProps().getProperty("sms.api.key", "aWhzc21zOnVsNjJ6eDM=");
+		SMS_API_KEY = Context.getProps().getProperty("sms.api.key");
 		SMS_USE_SSL = Context.getProps().getProperty("sms.server.ssl", "true").equals("true");
-		SMS_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.job.interval", "24"));
+		SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.alert.job.interval", "2"));
+		SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.reminder.job.interval", "24"));
 		String timeStr = Context.getProps().getProperty("sms.job.start_time", "00:00:00");
 		SMS_SCHEDULE_START_TIME = new Date();
 		Date scheduleTime = DateTimeUtil.fromString(timeStr, DateTimeUtil.detectDateFormat(timeStr));
