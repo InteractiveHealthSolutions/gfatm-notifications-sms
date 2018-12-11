@@ -53,10 +53,10 @@ public class SmsContext {
 
 	// How often to check for new SMS notifications in DB
 	public static int SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS;
-	
+
 	// How often to check for new SMS notifications in DB
 	public static int SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS;
-	
+
 	// What time to start schedule on
 	public static Date SMS_SCHEDULE_START_TIME;
 
@@ -64,7 +64,7 @@ public class SmsContext {
 		try {
 			readMessageProperties();
 			Context.initialize();
-			
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -72,8 +72,10 @@ public class SmsContext {
 				"https://ihs.trgccms.com/api/send_sms/");
 		SMS_API_KEY = Context.getProps().getProperty("sms.api.key");
 		SMS_USE_SSL = Context.getProps().getProperty("sms.server.ssl", "true").equals("true");
-		SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.alert.job.interval", "2"));
-		SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS = Integer.parseInt(Context.getProps().getProperty("sms.reminder.job.interval", "24"));
+		SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS = Integer
+				.parseInt(Context.getProps().getProperty("sms.alert.job.interval", "2"));
+		SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS = Integer
+				.parseInt(Context.getProps().getProperty("sms.reminder.job.interval", "24"));
 		String timeStr = Context.getProps().getProperty("sms.job.start_time", "00:00:00");
 		SMS_SCHEDULE_START_TIME = new Date();
 		Date scheduleTime = DateTimeUtil.fromString(timeStr, DateTimeUtil.detectDateFormat(timeStr));
@@ -88,7 +90,7 @@ public class SmsContext {
 	 * @throws IOException
 	 */
 	public static void readMessageProperties() throws IOException {
-		//Context.getRuleBook().
+		// Context.getRuleBook().
 		InputStream inputStream = ClassLoaderUtil.getResourceAsStream(MESSAGE_PROP_FILE, SmsContext.class);
 		if (inputStream != null) {
 			messages = new Properties();
@@ -103,14 +105,13 @@ public class SmsContext {
 	 * @return
 	 */
 	public static String getMessage(String code) {
-		String message=Context.getRuleBook().getMessages().get(code);
-		//String message = messages.getProperty(code);
+		String message = Context.getRuleBook().getMessages().get(code);
 		if (message == null) {
 			message = "Message unavailable for code: " + code;
 		}
 		return message;
 	}
-	
+
 	/**
 	 * Send SSL-enabled message
 	 * 

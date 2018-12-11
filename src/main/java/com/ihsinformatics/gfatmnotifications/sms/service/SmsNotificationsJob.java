@@ -156,11 +156,16 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 					log.warning(e.getMessage());
 				}
 				DateTime now = new DateTime();
-				DateTime beforeNow = now.minusHours(2);
+				DateTime beforeNow = now.minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
 				if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
-					continue;
+					if (!GfatmSmsNotificationsMain.DEBUG_MODE) {
+						continue;
+					}
 				}
 				String contact = getContactFromRule(patient, location, encounter, rule);
+				if (contact == null) {
+					continue;
+				}
 				boolean isPatient = false;
 				if (rule.getSendTo().equalsIgnoreCase("patient")) {
 					isPatient = true;
