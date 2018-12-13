@@ -143,7 +143,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			Location location = Context.getLocationByName(encounter.getLocation(), dbUtil);
 			List<Observation> observations = Context.getEncounterObservations(encounter, dbUtil);
 			encounter.setObservations(observations);
-			if (ValidationUtil.validateConditions(patient, location, encounter, rule)) {
+			if (ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
 				String preparedMessage = messageParser.parseFormattedMessage(
 						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
@@ -174,7 +174,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 						continue;
 					}
 				}
-				if (!ValidationUtil.validateStopConditions(patient, location, encounter, rule, dbUtil)) {
+				if (!ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
 					if (isPatient) {
 						informedPatients.put(patient.getPersonId(), patient);
 					}
