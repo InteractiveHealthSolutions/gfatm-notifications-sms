@@ -177,7 +177,8 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 						informedPatients.put(patient.getPersonId(), patient);
 					}
 					messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
-							DateTimeUtil.toSqlDateTimeString(sendOn), rule.getSendTo()));
+							DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
+							rule.getSendTo(), rule));
 					if (!rule.getRecordOnly()) {
 						sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
 					}

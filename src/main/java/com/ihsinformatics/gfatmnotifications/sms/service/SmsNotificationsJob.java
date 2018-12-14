@@ -143,7 +143,13 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			Location location = Context.getLocationByName(encounter.getLocation(), dbUtil);
 			List<Observation> observations = Context.getEncounterObservations(encounter, dbUtil);
 			encounter.setObservations(observations);
-			if (ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
+			boolean isRulePassed = false;
+			try {
+				isRulePassed = ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil);
+			} catch (Exception e1) {
+				log.warning("Exception thrown while validating rule: " + rule + ". " + e1.getMessage());
+			}
+			if (isRulePassed) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
 				String preparedMessage = messageParser.parseFormattedMessage(
 						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
@@ -174,15 +180,14 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 						continue;
 					}
 				}
-				if (!ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
-					if (isPatient) {
-						informedPatients.put(patient.getPersonId(), patient);
-					}
-					messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
-							DateTimeUtil.toSqlDateTimeString(sendOn), rule.getSendTo()));
-					if (!rule.getRecordOnly()) {
-						sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
-					}
+				if (isPatient) {
+					informedPatients.put(patient.getPersonId(), patient);
+				}
+				messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
+						DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
+						rule.getSendTo(), rule));
+				if (!rule.getRecordOnly()) {
+					sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
 				}
 			}
 		}
