@@ -29,6 +29,7 @@ import com.ihsinformatics.gfatmnotifications.common.model.Location;
 import com.ihsinformatics.gfatmnotifications.common.model.Message;
 import com.ihsinformatics.gfatmnotifications.common.model.Patient;
 import com.ihsinformatics.gfatmnotifications.common.model.Rule;
+import com.ihsinformatics.gfatmnotifications.common.model.User;
 import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
 import com.ihsinformatics.gfatmnotifications.common.service.SearchService;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
@@ -104,6 +105,11 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 		case "location":
 		case "supervisor":
 			contact = location.getPrimaryContact();
+			break;
+		case "treatment coordinator":
+			String treatmentCoordinatorName = patient.getTreatmentSupporter();
+			User treatmentCoordinator = Context.getUserByUsername(treatmentCoordinatorName, dbUtil);
+			contact = treatmentCoordinator.getPrimaryContact();
 			break;
 		default:
 			contact = new SearchService(dbUtil).searchContactFromRule(patient, encounter, rule);

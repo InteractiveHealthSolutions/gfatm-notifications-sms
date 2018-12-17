@@ -55,18 +55,6 @@ public class GfatmSmsNotificationsMain {
 		}
 	}
 
-	public void createJob(AbstractSmsNotificationsJob jobObj, String groupName, String jobName, String triggerName,
-			int repeatIntervalInHours) throws SchedulerException {
-		JobDetail job = JobBuilder.newJob(jobObj.getClass()).withIdentity(jobName, groupName).build();
-		job.getJobDataMap().put(jobName, jobObj);
-		// Create trigger with given interval and start time
-		SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-				.withIntervalInHours(repeatIntervalInHours).repeatForever();
-		Trigger trigger = TriggerBuilder.newTrigger().withIdentity(triggerName, groupName)
-				.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
-		scheduler.scheduleJob(job, trigger);
-	}
-
 	/**
 	 * @param args
 	 * @throws InputRequiredException
@@ -98,5 +86,17 @@ public class GfatmSmsNotificationsMain {
 			log.severe(e.getMessage());
 			System.exit(-1);
 		}
+	}
+
+	public void createJob(AbstractSmsNotificationsJob jobObj, String groupName, String jobName, String triggerName,
+			int repeatIntervalInHours) throws SchedulerException {
+		JobDetail job = JobBuilder.newJob(jobObj.getClass()).withIdentity(jobName, groupName).build();
+		job.getJobDataMap().put(jobName, jobObj);
+		// Create trigger with given interval and start time
+		SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
+				.withIntervalInHours(repeatIntervalInHours).repeatForever();
+		Trigger trigger = TriggerBuilder.newTrigger().withIdentity(triggerName, groupName)
+				.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
+		scheduler.scheduleJob(job, trigger);
 	}
 }
