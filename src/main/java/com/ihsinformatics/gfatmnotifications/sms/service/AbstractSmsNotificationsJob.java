@@ -95,8 +95,8 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 	 * @param rule
 	 * @return
 	 */
-	public String getContactFromRule(Patient patient, Location location, Encounter encounter, Rule rule) {
-		String contact;
+	public String getContactFromRule(Patient patient, Location location, Encounter encounter, Rule rule) throws NullPointerException {
+		String contact = null;
 		switch (rule.getSendTo().toLowerCase()) {
 		case "patient":
 			contact = patient.getPrimaryContact();
@@ -107,8 +107,7 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 			contact = location.getPrimaryContact();
 			break;
 		case "treatment coordinator":
-			String treatmentCoordinatorName = patient.getTreatmentSupporter();
-			User treatmentCoordinator = Context.getUserByUsername(treatmentCoordinatorName, dbUtil);
+			User treatmentCoordinator = Context.getUserByUsername(patient.getTreatmentSupporter(), dbUtil);
 			contact = treatmentCoordinator.getPrimaryContact();
 			break;
 		default:

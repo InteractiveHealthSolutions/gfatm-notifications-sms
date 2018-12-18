@@ -151,8 +151,6 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			}
 			if (isRulePassed) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
-				String preparedMessage = messageParser.parseFormattedMessage(
-						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 				Date sendOn = new Date();
 				try {
 					DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
@@ -167,8 +165,13 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 						continue;
 					}
 				}
-				String contact = getContactFromRule(patient, location, encounter, rule);
-				if (contact == null) {
+				String contact;
+				try {
+					contact = getContactFromRule(patient, location, encounter, rule);
+					if (contact == null) {
+						throw new NullPointerException("Contact is null");
+					}
+				} catch (NullPointerException e) {
 					continue;
 				}
 				boolean isPatient = false;
@@ -182,6 +185,8 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 				if (isPatient) {
 					informedPatients.put(patient.getPersonId(), patient);
 				}
+				String preparedMessage = messageParser.parseFormattedMessage(
+						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 				messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
 						DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
 						rule.getSendTo(), rule));
@@ -191,5 +196,4 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			}
 		}
 	}
-
 }

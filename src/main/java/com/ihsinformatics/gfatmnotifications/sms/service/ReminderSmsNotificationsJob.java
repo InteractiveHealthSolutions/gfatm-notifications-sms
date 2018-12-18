@@ -148,8 +148,6 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			encounter.setObservations(observations);
 			if (ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
-				String preparedMessage = messageParser.parseFormattedMessage(
-						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 				Date sendOn = new Date();
 				DateTime referenceDate = null;
 				try {
@@ -163,7 +161,15 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 				if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
 					continue;
 				}
-				String contact = getContactFromRule(patient, location, encounter, rule);
+				String contact;
+				try {
+					contact = getContactFromRule(patient, location, encounter, rule);
+					if (contact == null) {
+						throw new NullPointerException("Contact is null");
+					}
+				} catch (NullPointerException e) {
+					continue;
+				}
 				boolean isPatient = false;
 				if (rule.getSendTo().equalsIgnoreCase("patient")) {
 					isPatient = true;
@@ -176,6 +182,8 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 					if (isPatient) {
 						informedPatients.put(patient.getPersonId(), patient);
 					}
+					String preparedMessage = messageParser.parseFormattedMessage(
+							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 					messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
 							DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
 							rule.getSendTo(), rule));
@@ -185,6 +193,5 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 				}
 			}
 		}
-
 	}
 }
