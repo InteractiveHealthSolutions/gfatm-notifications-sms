@@ -154,9 +154,8 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 				String preparedMessage = messageParser.parseFormattedMessage(
 						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
 				Date sendOn = new Date();
-				DateTime referenceDate = null;
 				try {
-					referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
+					DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
 				} catch (Exception e) {
 					log.warning(e.getMessage());
