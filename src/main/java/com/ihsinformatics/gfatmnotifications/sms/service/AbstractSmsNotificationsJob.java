@@ -106,14 +106,16 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 		case "supervisor":
 			contact = location.getPrimaryContact();
 			break;
-		case "treatment coordinator":
-			User treatmentCoordinator = Context.getUserByUsername(patient.getTreatmentSupporter(), dbUtil);
-			contact = treatmentCoordinator.getPrimaryContact();
+		case "user":
+			User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
+			if (user != null) {
+				contact = user.getPrimaryContact();
+			}
 			break;
 		default:
-			contact = new SearchService(dbUtil).searchContactFromRule(patient, encounter, rule);
+			contact = new SearchService(dbUtil).searchContactFromEntityValuePair(patient, encounter, rule.getSendTo());
 		}
-		if (!ValidationUtil.isValidContactNumber(contact)) {
+		if (contact == null || !ValidationUtil.isValidContactNumber(contact)) {
 			log.info("Patient : " + patient.getPatientIdentifier() + " does not have an valid contact.");
 			contact = null;
 		}

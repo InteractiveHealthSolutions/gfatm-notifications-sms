@@ -165,9 +165,11 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 				try {
 					contact = getContactFromRule(patient, location, encounter, rule);
 					if (contact == null) {
-						throw new NullPointerException("Contact is null");
+						StringBuilder sb = new StringBuilder().append(patient.getPatientIdentifier()).append(" ").append(rule);
+						throw new NullPointerException("Contact number is either not available or invalid for transaction " + sb.toString());
 					}
 				} catch (NullPointerException e) {
+					log.warning(e.getMessage());
 					continue;
 				}
 				boolean isPatient = false;
