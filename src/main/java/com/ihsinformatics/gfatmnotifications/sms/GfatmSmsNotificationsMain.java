@@ -37,23 +37,9 @@ import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 public class GfatmSmsNotificationsMain {
 
 	// Detect whether the app is running in DEBUG mode or not
-	public static final boolean DEBUG_MODE;
+	public static final boolean DEBUG_MODE= ManagementFactory.getRuntimeMXBean().getInputArguments().toString().indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 	private static Scheduler scheduler;
-
-	static {
-		DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString().indexOf("-agentlib:jdwp") > 0;
-		// In debug mode, run immediately
-		if (DEBUG_MODE) {
-			SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150);
-		}
-		try {
-			scheduler = StdSchedulerFactory.getDefaultScheduler();
-		} catch (SchedulerException e) {
-			log.severe(e.getMessage());
-			System.exit(-1);
-		}
-	}
 
 	/**
 	 * @param args
@@ -64,6 +50,7 @@ public class GfatmSmsNotificationsMain {
 	public static void main(String[] args) {
 		try {
 			GfatmSmsNotificationsMain sms = new GfatmSmsNotificationsMain();
+			scheduler = StdSchedulerFactory.getDefaultScheduler();
 
 			// Create SMS Job
 			SmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
@@ -95,6 +82,10 @@ public class GfatmSmsNotificationsMain {
 		// Create trigger with given interval and start time
 		SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
 				.withIntervalInHours(repeatIntervalInHours).repeatForever();
+		// In debug mode, run immediately
+		if (DEBUG_MODE) {
+			SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150);
+		}
 		Trigger trigger = TriggerBuilder.newTrigger().withIdentity(triggerName, groupName)
 				.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
 		scheduler.scheduleJob(job, trigger);

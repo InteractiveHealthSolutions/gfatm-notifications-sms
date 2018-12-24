@@ -75,7 +75,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 		try {
 			Context.initialize();
 			if (GfatmSmsNotificationsMain.DEBUG_MODE) {
-				setDateFrom(getDateFrom().minusMonths(12));
+				setDateFrom(getDateFrom().minusHours(12));
 				setDateTo(DateTime.now());
 			}
 			run(getDateFrom(), getDateTo());
@@ -147,7 +147,11 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			try {
 				isRulePassed = ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil);
 			} catch (Exception e1) {
-				log.warning("Exception thrown while validating rule: " + rule + ". " + e1.getMessage());
+				StringBuilder sb = new StringBuilder().append("Exception thrown while validating rule: ").append(rule)
+						.append(" against objects:\r\n").append("Patient:").append(patient.toString()).append("\r\n")
+						.append("Encounter:").append(encounter.toString()).append("\r\n").append(e1.getMessage());
+				log.warning(sb.toString());
+				e1.printStackTrace();
 			}
 			if (isRulePassed) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
@@ -169,8 +173,10 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 				try {
 					contact = getContactFromRule(patient, location, encounter, rule);
 					if (contact == null) {
-						StringBuilder sb = new StringBuilder().append(patient.getPatientIdentifier()).append(" ").append(rule);
-						throw new NullPointerException("Contact number is either not available or invalid for transaction " + sb.toString());
+						StringBuilder sb = new StringBuilder().append(patient.getPatientIdentifier()).append(" ")
+								.append(rule);
+						throw new NullPointerException(
+								"Contact number is either not available or invalid for transaction " + sb.toString());
 					}
 				} catch (NullPointerException e) {
 					log.warning(e.getMessage());

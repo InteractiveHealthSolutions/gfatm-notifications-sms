@@ -63,8 +63,7 @@ public class SmsContext {
 	static {
 		try {
 			readMessageProperties();
-			Context.initialize();
-
+			Context.initialize(true, false, false);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

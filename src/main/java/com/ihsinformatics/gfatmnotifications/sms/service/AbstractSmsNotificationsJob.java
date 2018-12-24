@@ -116,8 +116,7 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 			contact = new SearchService(dbUtil).searchContactFromEntityValuePair(patient, encounter, rule.getSendTo());
 		}
 		if (contact == null || !ValidationUtil.isValidContactNumber(contact)) {
-			log.info("Patient : " + patient.getPatientIdentifier() + " does not have an valid contact.");
-			contact = null;
+			return null;
 		}
 		return contact;
 	}
