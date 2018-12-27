@@ -37,7 +37,8 @@ import com.ihsinformatics.gfatmnotifications.sms.service.SmsNotificationsJob;
 public class GfatmSmsNotificationsMain {
 
 	// Detect whether the app is running in DEBUG mode or not
-	public static final boolean DEBUG_MODE= ManagementFactory.getRuntimeMXBean().getInputArguments().toString().indexOf("-agentlib:jdwp") > 0;
+	public static final boolean DEBUG_MODE = ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
+			.indexOf("-agentlib:jdwp") > 0;
 	private static final Logger log = Logger.getLogger(Class.class.getName());
 	private static Scheduler scheduler;
 
@@ -53,10 +54,9 @@ public class GfatmSmsNotificationsMain {
 			scheduler = StdSchedulerFactory.getDefaultScheduler();
 
 			// Create SMS Job
-			SmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
+			AbstractSmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
 			smsAlertJobObj.setDateFrom(new DateTime().minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS));
 			smsAlertJobObj.setDateTo(new DateTime());
-			// Run every 2 hours
 			sms.createJob(smsAlertJobObj, "smsGroup", "smsAlertJob", "smsAlertTrigger",
 					SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
 
@@ -64,8 +64,8 @@ public class GfatmSmsNotificationsMain {
 			smsReminderJobObj
 					.setDateFrom(new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS));
 			smsReminderJobObj.setDateTo(new DateTime());
-			// Run every day
-//			sms.createJob(smsReminderJobObj, "smsGroup", "smsReminderJob", "smsReminderTrigger", SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS);
+//			sms.createJob(smsReminderJobObj, "smsGroup", "smsReminderJob", "smsReminderTrigger",
+//					SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS);
 
 			// Execute scheduler
 			scheduler.start();

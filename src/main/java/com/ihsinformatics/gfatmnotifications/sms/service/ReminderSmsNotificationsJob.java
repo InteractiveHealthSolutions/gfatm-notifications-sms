@@ -40,6 +40,7 @@ import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
+import com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DateTimeUtil;
 
@@ -68,15 +69,13 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		JobDataMap dataMap = context.getMergedJobDataMap();
-		ReminderSmsNotificationsJob smsJob = (ReminderSmsNotificationsJob) dataMap.get("smsJob2");
+		ReminderSmsNotificationsJob smsJob = (ReminderSmsNotificationsJob) dataMap.get("smsReminderJob");
 		this.setDateFrom(smsJob.getDateFrom());
 		this.setDateTo(smsJob.getDateTo());
 		try {
 			Context.initialize();
-			setDateFrom(getDateFrom().minusHours(24));
-			log.info(getDateFrom() + " " + getDateTo());
 			run(null, null);
-			ExcelSheetWriter.writeFile(fileName, messages);
+			ExcelSheetWriter.writeFile(getOutputFilePath() + EXCEL_FILENAME, messages);
 			log.info("Reminder Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
@@ -85,7 +84,6 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			log.warning("Unable to parse messages.");
 			throw new JobExecutionException(e.getMessage());
 		}
-
 	}
 
 	/*
@@ -107,17 +105,9 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
-			if (rule.getPlusMinusUnit().equalsIgnoreCase("hours")) {
-				continue;
-			}
-			from = rule.getFetchDurationDate();
-			// Default value if there is no reference/fetch duration is not defined
-			if (from == null) {
-				from = to.minusMonths(2);
-			}
 			// Fetch all the encounters for this type
-			List<Encounter> encounters = Context.getEncounters(from, new DateTime(),
-					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
+			List<Encounter> encounters = Context.getEncounters(rule.getFetchDurationDate(),
+					new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS), Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
 			executeRule(encounters, rule);
 		}
 	}
@@ -146,27 +136,40 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			Location location = Context.getLocationByName(encounter.getLocation(), dbUtil);
 			List<Observation> observations = Context.getEncounterObservations(encounter, dbUtil);
 			encounter.setObservations(observations);
-			if (ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
+			boolean isRulePassed = false;
+			try {
+				isRulePassed = ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil);
+			} catch (Exception e1) {
+				StringBuilder sb = new StringBuilder().append("Exception thrown while validating rule: ").append(rule)
+						.append(" against objects:\r\n").append("Patient:").append(patient.toString()).append("\r\n")
+						.append("Encounter:").append(encounter.toString()).append("\r\n").append(e1.getMessage());
+				log.warning(sb.toString());
+				e1.printStackTrace();
+			}
+			if (isRulePassed) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
 				Date sendOn = new Date();
-				DateTime referenceDate = null;
 				try {
-					referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
+					DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
 				} catch (Exception e) {
 					log.warning(e.getMessage());
 				}
 				DateTime now = new DateTime();
-				DateTime beforeNow = now.minusDays(1);
+				DateTime beforeNow = now.minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
 				if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
-					continue;
+					if (!GfatmSmsNotificationsMain.DEBUG_MODE) {
+						continue;
+					}
 				}
 				String contact;
 				try {
 					contact = getContactFromRule(patient, location, encounter, rule);
 					if (contact == null) {
-						StringBuilder sb = new StringBuilder().append(patient.getPatientIdentifier()).append(" ").append(rule);
-						throw new NullPointerException("Contact number is either not available or invalid for transaction " + sb.toString());
+						StringBuilder sb = new StringBuilder().append(patient.getPatientIdentifier()).append(" ")
+								.append(rule);
+						throw new NullPointerException(
+								"Contact number is either not available or invalid for transaction " + sb.toString());
 					}
 				} catch (NullPointerException e) {
 					log.warning(e.getMessage());
@@ -180,18 +183,16 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 						continue;
 					}
 				}
-				if (!ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil)) {
-					if (isPatient) {
-						informedPatients.put(patient.getPersonId(), patient);
-					}
-					String preparedMessage = messageParser.parseFormattedMessage(
-							SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
-					messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
-							DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
-							rule.getSendTo(), rule));
-					if (!rule.getRecordOnly()) {
-						sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
-					}
+				if (isPatient) {
+					informedPatients.put(patient.getPersonId(), patient);
+				}
+				String preparedMessage = messageParser.parseFormattedMessage(
+						SmsContext.getMessage(rule.getMessageCode()), encounter, patient, user, location);
+				messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
+						DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
+						rule.getSendTo(), rule));
+				if (!rule.getRecordOnly()) {
+					sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
 				}
 			}
 		}

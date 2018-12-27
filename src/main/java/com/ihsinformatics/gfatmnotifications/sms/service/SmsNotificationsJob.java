@@ -69,17 +69,17 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		JobDataMap dataMap = context.getMergedJobDataMap();
-		SmsNotificationsJob smsJob = (SmsNotificationsJob) dataMap.get("smsAlertJob");
+		AbstractSmsNotificationsJob smsJob = (AbstractSmsNotificationsJob) dataMap.get("smsAlertJob");
 		this.setDateFrom(smsJob.getDateFrom());
 		this.setDateTo(smsJob.getDateTo());
 		try {
 			Context.initialize();
 			if (GfatmSmsNotificationsMain.DEBUG_MODE) {
-				setDateFrom(getDateFrom().minusHours(12));
+				setDateFrom(getDateFrom().minusHours(4));
 				setDateTo(DateTime.now());
 			}
 			run(getDateFrom(), getDateTo());
-			ExcelSheetWriter.writeFile(fileName, messages);
+			ExcelSheetWriter.writeFile(getOutputFilePath() + EXCEL_FILENAME, messages);
 			log.info("New spread sheet is created for logging.");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");

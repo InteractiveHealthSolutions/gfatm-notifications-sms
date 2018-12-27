@@ -46,13 +46,23 @@ import com.ihsinformatics.util.DateTimeUtil;
  */
 public abstract class AbstractSmsNotificationsJob implements NotificationService {
 	protected static final Logger log = Logger.getLogger(Class.class.getName());
+	protected static final String EXCEL_FILENAME = "gfatm-notifications.xlsx";
 	protected List<Message> messages = new ArrayList<>();
-	protected String fileName = System.getProperty("user.home") + "/gfatm-notifications-log";
 
 	protected DatabaseUtil dbUtil;
 	protected DateTime dateFrom;
 	protected DateTime dateTo;
 	protected FormattedMessageParser messageParser;
+
+	/**
+	 * Returns output file path for logging
+	 * 
+	 * @return
+	 */
+	public String getOutputFilePath() {
+		return Context.getProps().getProperty("output.path",
+				System.getProperty("user.home") + System.getProperty("file.separator"));
+	}
 
 	/*
 	 * @see
@@ -95,7 +105,8 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 	 * @param rule
 	 * @return
 	 */
-	public String getContactFromRule(Patient patient, Location location, Encounter encounter, Rule rule) throws NullPointerException {
+	public String getContactFromRule(Patient patient, Location location, Encounter encounter, Rule rule)
+			throws NullPointerException {
 		String contact = null;
 		switch (rule.getSendTo().toLowerCase()) {
 		case "patient":
