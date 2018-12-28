@@ -75,11 +75,11 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 		try {
 			Context.initialize();
 			if (GfatmSmsNotificationsMain.DEBUG_MODE) {
-				setDateFrom(getDateFrom().minusHours(4));
+				setDateFrom(getDateFrom().minusHours(480));
 				setDateTo(DateTime.now());
 			}
 			run(getDateFrom(), getDateTo());
-			ExcelSheetWriter.writeFile(getOutputFilePath() + EXCEL_FILENAME, messages);
+			ExcelSheetWriter.writeFile(Context.getOutputFilePath() + EXCEL_FILENAME, messages);
 			log.info("New spread sheet is created for logging.");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");

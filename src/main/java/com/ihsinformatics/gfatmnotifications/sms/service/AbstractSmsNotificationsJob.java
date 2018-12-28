@@ -54,16 +54,6 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 	protected DateTime dateTo;
 	protected FormattedMessageParser messageParser;
 
-	/**
-	 * Returns output file path for logging
-	 * 
-	 * @return
-	 */
-	public String getOutputFilePath() {
-		return Context.getProps().getProperty("output.path",
-				System.getProperty("user.home") + System.getProperty("file.separator"));
-	}
-
 	/*
 	 * @see
 	 * com.ihsinformatics.gfatmnotifications.common.service.NotificationService#

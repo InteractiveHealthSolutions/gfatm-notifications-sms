@@ -75,7 +75,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 		try {
 			Context.initialize();
 			run(null, null);
-			ExcelSheetWriter.writeFile(getOutputFilePath() + EXCEL_FILENAME, messages);
+			ExcelSheetWriter.writeFile(Context.getOutputFilePath() + EXCEL_FILENAME, messages);
 			log.info("Reminder Excel sheet is created");
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");

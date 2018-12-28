@@ -32,10 +32,6 @@ import com.ihsinformatics.util.DateTimeUtil;
  */
 @SuppressWarnings("deprecation")
 public class SmsContext {
-
-	// Path to the directory where all rule files are stored
-	public static final String RULE_DIRECTORY = "rules";
-
 	// Message file path
 	private static final String MESSAGE_PROP_FILE = "message.properties";
 
