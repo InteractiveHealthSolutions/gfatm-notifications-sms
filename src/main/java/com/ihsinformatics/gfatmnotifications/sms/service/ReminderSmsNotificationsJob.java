@@ -40,7 +40,6 @@ import com.ihsinformatics.gfatmnotifications.common.util.Decision;
 import com.ihsinformatics.gfatmnotifications.common.util.ExcelSheetWriter;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
-import com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DateTimeUtil;
 
@@ -75,8 +74,11 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 		try {
 			Context.initialize();
 			run(null, null);
-			ExcelSheetWriter.writeFile(Context.getOutputFilePath() + EXCEL_FILENAME, messages);
-			log.info("Reminder Excel sheet is created");
+			String fileName = Context.getOutputFilePath() + "gfatm-notifications-sms-"
+					+ DateTimeUtil.toString(new Date(), DateTimeUtil.SQL_DATE) + ".xlsx";
+			ExcelSheetWriter.writeFile(fileName, messages);
+			log.info("Message log written on Excel file.");
+			System.exit(0);
 		} catch (IOException e) {
 			log.warning("Unable to initialize context.");
 			throw new JobExecutionException(e.getMessage());
@@ -107,7 +109,9 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			}
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(rule.getFetchDurationDate(),
-					new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS), Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
+					new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS),
+					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
+			log.info("Running rule: " + rule.toString());
 			executeRule(encounters, rule);
 		}
 	}
@@ -148,19 +152,9 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			}
 			if (isRulePassed) {
 				User user = Context.getUserByUsername(encounter.getUsername(), dbUtil);
-				Date sendOn = new Date();
-				try {
-					DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
-					sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
-				} catch (Exception e) {
-					log.warning(e.getMessage());
-				}
-				DateTime now = new DateTime();
-				DateTime beforeNow = now.minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
-				if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
-					if (!GfatmSmsNotificationsMain.DEBUG_MODE) {
-						continue;
-					}
+				Date sendOn = getSendDate(rule, encounter);
+				if (sendOn == null) {
+					continue;
 				}
 				String contact;
 				try {
@@ -191,6 +185,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 				messages.add(new Message(preparedMessage, contact, encounter.getEncounterType(),
 						DateTimeUtil.toSqlDateTimeString(new Date()), DateTimeUtil.toSqlDateTimeString(sendOn),
 						rule.getSendTo(), rule));
+				log.info("Sending message: \"" + preparedMessage + "\" to " + contact);
 				if (!rule.getRecordOnly()) {
 					sendNotification(contact, preparedMessage, Context.PROJECT_NAME, sendOn);
 				}

@@ -50,23 +50,49 @@ public class GfatmSmsNotificationsMain {
 	 */
 	public static void main(String[] args) {
 		try {
+			boolean runAlerts = false;
+			boolean runReminders = false;
+			// Check arguments first
+			if (args[0] == null || args.length == 0) {
+				StringBuilder sb = new StringBuilder();
+				sb.append("Arguments are invalid. Arguments must be provided as:\r\n").append("-a to run alerts")
+						.append("\r\n").append("-r to run reminders").append("\r\n")
+						.append("-p to define path to properties file.").append("\r\n").append("-i to run immediately")
+						.append("\r\n")
+						.append("Both -a and -r should not be set at once, because only one of them will execute.");
+				System.out.println(sb.toString());
+				System.exit(0);
+			}
+			// Read arguments
+			for (int i = 0; i < args.length; i++) {
+				if (args[i].equals("-a")) {
+					runAlerts = true;
+				} else if (args[i].equals("-r")) {
+					runReminders = true;
+				} else if (args[i].equals("-p")) {
+					// Set path
+				} else if (args[i].equals("-i")) {
+					SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 300);
+				}
+			}
 			GfatmSmsNotificationsMain sms = new GfatmSmsNotificationsMain();
 			scheduler = StdSchedulerFactory.getDefaultScheduler();
 
-			// Create SMS Job
-			AbstractSmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
-			smsAlertJobObj.setDateFrom(new DateTime().minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS));
-			smsAlertJobObj.setDateTo(new DateTime());
-			sms.createJob(smsAlertJobObj, "smsGroup", "smsAlertJob", "smsAlertTrigger",
-					SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
-
-			ReminderSmsNotificationsJob smsReminderJobObj = new ReminderSmsNotificationsJob();
-			smsReminderJobObj
-					.setDateFrom(new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS));
-			smsReminderJobObj.setDateTo(new DateTime());
-//			sms.createJob(smsReminderJobObj, "smsGroup", "smsReminderJob", "smsReminderTrigger",
-//					SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS);
-
+			if (runAlerts) {
+				// Create SMS Job
+				AbstractSmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
+				smsAlertJobObj.setDateFrom(new DateTime().minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS));
+				smsAlertJobObj.setDateTo(new DateTime());
+				sms.createJob(smsAlertJobObj, "smsGroup", "smsAlertJob", "smsAlertTrigger",
+						SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
+			} else if (runReminders) {
+				AbstractSmsNotificationsJob smsReminderJobObj = new ReminderSmsNotificationsJob();
+				smsReminderJobObj
+						.setDateFrom(new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS));
+				smsReminderJobObj.setDateTo(new DateTime());
+				sms.createJob(smsReminderJobObj, "smsGroup", "smsReminderJob", "smsReminderTrigger",
+						SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS);
+			}
 			// Execute scheduler
 			scheduler.start();
 		} catch (SchedulerException e) {
@@ -82,10 +108,6 @@ public class GfatmSmsNotificationsMain {
 		// Create trigger with given interval and start time
 		SimpleScheduleBuilder alertScheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
 				.withIntervalInHours(repeatIntervalInHours).repeatForever();
-		// In debug mode, run immediately
-		if (DEBUG_MODE) {
-			SmsContext.SMS_SCHEDULE_START_TIME = new Date(new Date().getTime() + 150);
-		}
 		Trigger trigger = TriggerBuilder.newTrigger().withIdentity(triggerName, groupName)
 				.withSchedule(alertScheduleBuilder).startAt(SmsContext.SMS_SCHEDULE_START_TIME).build();
 		scheduler.scheduleJob(job, trigger);

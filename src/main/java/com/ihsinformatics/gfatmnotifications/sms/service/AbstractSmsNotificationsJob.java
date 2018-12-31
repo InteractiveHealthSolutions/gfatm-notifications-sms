@@ -34,6 +34,7 @@ import com.ihsinformatics.gfatmnotifications.common.service.NotificationService;
 import com.ihsinformatics.gfatmnotifications.common.service.SearchService;
 import com.ihsinformatics.gfatmnotifications.common.util.FormattedMessageParser;
 import com.ihsinformatics.gfatmnotifications.common.util.ValidationUtil;
+import com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain;
 import com.ihsinformatics.gfatmnotifications.sms.SmsContext;
 import com.ihsinformatics.util.DatabaseUtil;
 import com.ihsinformatics.util.DateTimeUtil;
@@ -46,7 +47,6 @@ import com.ihsinformatics.util.DateTimeUtil;
  */
 public abstract class AbstractSmsNotificationsJob implements NotificationService {
 	protected static final Logger log = Logger.getLogger(Class.class.getName());
-	protected static final String EXCEL_FILENAME = "gfatm-notifications.xlsx";
 	protected List<Message> messages = new ArrayList<>();
 
 	protected DatabaseUtil dbUtil;
@@ -148,6 +148,31 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 	 */
 	public void setDateTo(DateTime dateTo) {
 		this.dateTo = dateTo;
+	}
+
+	/**
+	 * Get date to send message from given Rule and Encounter objects
+	 * 
+	 * @param rule
+	 * @param encounter
+	 * @return
+	 */
+	public Date getSendDate(Rule rule, Encounter encounter) {
+		Date sendOn = new Date();
+		try {
+			DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
+			sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
+			DateTime now = new DateTime();
+			DateTime beforeNow = now.minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
+			if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
+				if (!GfatmSmsNotificationsMain.DEBUG_MODE) {
+					return null;
+				}
+			}
+		} catch (Exception e) {
+			log.warning(e.getMessage());
+		}
+		return sendOn;
 	}
 
 	/**
