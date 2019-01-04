@@ -118,7 +118,7 @@ public class SmsNotificationsJob extends AbstractSmsNotificationsJob {
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(from, to,
 					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
-			log.info("Running rule: " + rule.toString());
+			log.info("Running rule: " + rule.toString() + " for " + encounters.size() + " Encounters");
 			executeRule(encounters, rule);
 		}
 	}

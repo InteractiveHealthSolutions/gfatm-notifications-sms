@@ -111,7 +111,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			List<Encounter> encounters = Context.getEncounters(rule.getFetchDurationDate(),
 					new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS),
 					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
-			log.info("Running rule: " + rule.toString());
+			log.info("Running rule: " + rule.toString() + " for " + encounters.size() + " Encounters");
 			executeRule(encounters, rule);
 		}
 	}
