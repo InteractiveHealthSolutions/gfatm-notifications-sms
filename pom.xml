@@ -23,25 +23,22 @@
 		</resources>
 		<plugins>
 		
-<!-- <plugin>
-    <groupId>org.apache.maven.plugins</groupId>
-    <artifactId>maven-dependency-plugin</artifactId>
-    <executions>
-        <execution>
-            <id>copy-dependencies</id>
-            <phase>prepare-package</phase>
-            <goals>
-                <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-                <outputDirectory>${project.build.directory}/classes/lib</outputDirectory>
-                <overWriteReleases>false</overWriteReleases>
-                <overWriteSnapshots>false</overWriteSnapshots>
-                <overWriteIfNewer>true</overWriteIfNewer>
-            </configuration>
-        </execution>
-    </executions>
-</plugin> --> 
+      <plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-dependency-plugin</artifactId>
+  <executions>
+    <execution>
+      <id>copy-dependencies</id>
+      <phase>prepare-package</phase>
+      <goals>
+        <goal>copy-dependencies</goal>
+      </goals>
+      <configuration>
+        <outputDirectory>${project.build.directory}/${project.build.finalName}.lib</outputDirectory>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
 		
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -51,19 +48,20 @@
 					<target>1.7</target>
 				</configuration>
 			</plugin>
+			
 			<plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
-          <archive>
-            <manifest>
-               <!-- <addClasspath>true</addClasspath>
-               <classpathPrefix>lib</classpathPrefix> -->
-              <mainClass>com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain</mainClass>
-            </manifest>
-          </archive>
-        </configuration>
-      </plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-jar-plugin</artifactId>
+  <configuration>
+    <archive>
+      <manifest>
+        <addClasspath>true</addClasspath>
+        <classpathPrefix>${project.build.finalName}.lib/</classpathPrefix>
+        <mainClass>com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain</mainClass>
+      </manifest>
+    </archive>
+  </configuration>
+</plugin>
       
 		</plugins>
 	</build>
