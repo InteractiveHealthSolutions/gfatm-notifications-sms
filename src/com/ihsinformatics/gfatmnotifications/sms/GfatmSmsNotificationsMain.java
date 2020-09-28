@@ -95,7 +95,7 @@ public class GfatmSmsNotificationsMain {
 			}
 			// Execute scheduler
 			scheduler.start();
-		} catch (SchedulerException e) {
+		}  catch (SchedulerException e) {
 			log.severe(e.getMessage());
 			System.exit(-1);
 		}
