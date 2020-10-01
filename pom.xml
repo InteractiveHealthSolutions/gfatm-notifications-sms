@@ -22,6 +22,8 @@
 			</resource>
 		</resources>
 		<plugins>
+		
+		
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.5.1</version>
@@ -30,6 +32,32 @@
 					<target>1.7</target>
 				</configuration>
 			</plugin>
+			 
+			<plugin>
+			    <groupId>org.apache.maven.plugins</groupId>
+			    <artifactId>maven-assembly-plugin</artifactId>
+			    <executions>
+			        <execution>
+			            <phase>package</phase>
+			            <goals>
+			                <goal>single</goal>
+			            </goals>
+			            <configuration>
+			                <archive>
+			                <manifest>
+			                    <mainClass>
+			                        com.ihsinformatics.gfatmnotifications.sms.GfatmSmsNotificationsMain
+			                    </mainClass>
+			                </manifest>
+			                </archive>
+			                <descriptorRefs>
+			                    <descriptorRef>jar-with-dependencies</descriptorRef>
+			                </descriptorRefs>
+			            </configuration>
+			        </execution>
+			    </executions>
+			</plugin> 
+      
 		</plugins>
 	</build>
 	
