@@ -16,11 +16,13 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.joda.time.DateTime;
 
 import com.ihsinformatics.gfatmnotifications.common.Context;
@@ -162,17 +164,24 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 		try {
 			DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 			sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
-			DateTime now = new DateTime();
+			
+			Date currentDate = new Date();// get current date           
+			int dateMargin = getZeroTimeDate(currentDate).compareTo(getZeroTimeDate(sendOn));
+			
+			if(dateMargin == 0)
+				return sendOn;
+				
+			/*DateTime now = new DateTime();
 			DateTime beforeNow = now.minusHours(SmsContext.SMS_ALERT_SCHEDULE_INTERVAL_IN_HOURS);
 			if (!(sendOn.getTime() >= beforeNow.getMillis() && sendOn.getTime() <= now.getMillis())) {
 				if (!GfatmSmsNotificationsMain.DEBUG_MODE) {
 					return null;
 				}
-			}
+			}*/
 		} catch (Exception e) {
 			log.warning(e.getMessage());
 		}
-		return sendOn;
+		return null;
 	}
 
 	/**
@@ -195,5 +204,20 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 	 * @throws ParseException
 	 */
 	public abstract void executeRule(List<Encounter> encounters, Rule rule) throws ParseException;
+	
+	public static Date getZeroTimeDate(Date fecha) {
+	    Date res = fecha;
+	    Calendar calendar = Calendar.getInstance();
+
+	    calendar.setTime( fecha );
+	    calendar.set(Calendar.HOUR_OF_DAY, 0);
+	    calendar.set(Calendar.MINUTE, 0);
+	    calendar.set(Calendar.SECOND, 0);
+	    calendar.set(Calendar.MILLISECOND, 0);
+
+	    res = calendar.getTime();
+
+	    return res;
+	}
 
 }
