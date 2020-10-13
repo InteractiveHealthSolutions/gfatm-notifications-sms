@@ -107,11 +107,13 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			if (rule.getEncounterType() == null) {
 				continue;
 			}
+			
 			// Fetch all the encounters for this type
 			List<Encounter> encounters = Context.getEncounters(rule.getFetchDurationDate(),
 					new DateTime().minusHours(SmsContext.SMS_REMINDER_SCHEDULE_INTERVAL_IN_HOURS),
 					Context.getEncounterTypeId(rule.getEncounterType()), dbUtil);
 			log.info("Running rule: " + rule.toString() + " for " + encounters.size() + " Encounters");
+					
 			executeRule(encounters, rule);
 		}
 	}
@@ -124,7 +126,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 	 * #executeRule(java.util.List,
 	 * com.ihsinformatics.gfatmnotifications.common.model.Rule)
 	 */
-	public void executeRule(List<Encounter> encounters, Rule rule) throws ParseException {
+	public void executeRule(List<Encounter> encounters, Rule rule) throws ParseException {		
 		// patient to whom sms is already sent ?
 		Map<Integer, Patient> informedPatients = new HashMap<>();
 		for (Encounter encounter : encounters) {
@@ -140,6 +142,7 @@ public class ReminderSmsNotificationsJob extends AbstractSmsNotificationsJob {
 			Location location = Context.getLocationByName(encounter.getLocation(), dbUtil);
 			List<Observation> observations = Context.getEncounterObservations(encounter, dbUtil);
 			encounter.setObservations(observations);
+			
 			boolean isRulePassed = false;
 			try {
 				isRulePassed = ValidationUtil.validateRule(rule, patient, location, encounter, dbUtil);
