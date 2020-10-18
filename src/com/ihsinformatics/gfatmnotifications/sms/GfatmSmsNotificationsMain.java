@@ -60,6 +60,7 @@ public class GfatmSmsNotificationsMain {
 						.append("-p to define path to properties file.").append("\r\n").append("-i to run immediately")
 						.append("\r\n")
 						.append("Both -a and -r should not be set at once, because only one of them will execute.");
+				
 				System.out.println(sb.toString());
 				System.exit(0);
 			}
