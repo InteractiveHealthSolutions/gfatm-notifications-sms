@@ -78,7 +78,6 @@ public class GfatmSmsNotificationsMain {
 			}
 			GfatmSmsNotificationsMain sms = new GfatmSmsNotificationsMain();
 			scheduler = StdSchedulerFactory.getDefaultScheduler();
-
 			if (runAlerts) {
 				// Create SMS Job
 				AbstractSmsNotificationsJob smsAlertJobObj = new SmsNotificationsJob();
