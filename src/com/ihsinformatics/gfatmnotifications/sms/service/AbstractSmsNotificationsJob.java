@@ -71,7 +71,7 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 			content.append("message=" + URLEncoder.encode(message, "UTF-8") + "&");
 			content.append(
 					"schedule_time=" + URLEncoder.encode(DateTimeUtil.toSqlDateTimeString(sendOn), "UTF-8") + "&");
-			content.append("project_id=" + Context.PROJECT_NAME + "&");
+			content.append("project_id=" + Context.PROJECT_NAME.replace(" ", "-") + "&");
 			if (SmsContext.SMS_USE_SSL) {
 				response = SmsContext.postSecure(SmsContext.SMS_SERVER_ADDRESS, content.toString());
 			} else {
@@ -164,7 +164,7 @@ public abstract class AbstractSmsNotificationsJob implements NotificationService
 		try {
 			DateTime referenceDate = Context.getReferenceDate(rule.getScheduleDate(), encounter);
 			sendOn = Context.calculateScheduleDate(referenceDate, rule.getPlusMinus(), rule.getPlusMinusUnit());
-			
+	
 			Date currentDate = new Date();// get current date           
 			int dateMargin = getZeroTimeDate(currentDate).compareTo(getZeroTimeDate(sendOn));
 			
